@@ -25,11 +25,7 @@ fn sanitize(username: String) -> String {
 
 pub fn generate_email_address(username: Option<String>, domain: &str) -> String {
     let local_part = match username {
-        Some(name) => {
-            // If a name is provided, sanitize it and append a short random string
-            // to ensure uniqueness.
-            format!("{}_{}", sanitize(name), random_string(4))
-        }
+        Some(name) => sanitize(name),
         None => {
             // If no name is provided, just generate a random string.
             random_string(8)
@@ -39,4 +35,3 @@ pub fn generate_email_address(username: Option<String>, domain: &str) -> String 
     // Append the '@' and the domain to the generated local_part.
     format!("{}@{}", local_part, domain)
 }
-

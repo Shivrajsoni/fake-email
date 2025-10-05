@@ -1,9 +1,11 @@
 use crate::core::{AppConfig, AppState};
-use axum::{Router, routing::post};
+use axum::{Router, routing::get as get_route, routing::post};
 use dotenv::dotenv;
 use sqlx::PgPool;
 use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use tower_http::cors::CorsLayer;
 
 // Declare the modules we created.
@@ -26,23 +28,60 @@ async fn main() {
         .await
         .expect("Failed to create database pool");
 
-    // --- Shared Application State ---
+    // Wrap the pool in an Arc for shared ownership
+    let db_pool_arc = Arc::new(db_pool);
+
+    // --- Shared Application State (for Axum) ---
     let app_state = AppState {
-        db_pool,
+        db_pool: Arc::clone(&db_pool_arc), // Clone the Arc for the HTTP server
         config: app_config,
     };
 
+    // --- Start SMTP Server ---
+    let smtp_db_pool = Arc::clone(&db_pool_arc);
+    tokio::spawn(async move {
+        if let Err(e) = smtp_server::run_smtp_server(smtp_db_pool).await {
+            eprintln!("SMTP server failed: {:?}", e);
+        }
+    });
+
+    // --- Axum Router ---
     let app = Router::new()
         .route(
             "/api/email/generate",
             post(api::email::generate_email_handler),
         )
+        .route(
+            "/api/email/:address/summaries",
+            get_route(api::email::list_email_summaries_handler),
+        )
+        .route(
+            "/api/email/:address/:email_id",
+            get_route(api::email::get_email_detail_handler),
+        )
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
-    // --- Start Server ---
+    // --- Start HTTP Server ---
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("Server listening on {}", addr);
+    println!("HTTP Server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await;
+    let server = axum::serve(listener, app);
+
+    // Background cleanup task
+    let cleanup_pool = Arc::clone(&db_pool_arc);
+    tokio::spawn(async move {
+        loop {
+            if let Ok(deleted) =
+                db::services::temp_address::delete_expired_temp_addresses(&cleanup_pool).await
+            {
+                if deleted > 0 {
+                    println!("Cleanup: deleted {} expired temp addresses", deleted);
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        }
+    });
+
+    server.await.unwrap();
 }

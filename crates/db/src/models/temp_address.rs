@@ -8,8 +8,8 @@ pub struct TempEmailAddress {
     pub id: Uuid,
     pub address: String,
     pub username: Option<String>,
-    pub created_at: NaiveDateTime,
-    pub expires_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
     pub is_active: Option<bool>,
 }
 

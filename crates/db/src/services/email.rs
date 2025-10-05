@@ -1,3 +1,4 @@
+use crate::models::email::{EmailDetail, EmailSummary, NewReceivedEmail, RecievedEmail};
 use crate::models::temp_address::TempEmailAddress;
 use crate::services::error::ServiceError;
 use crate::services::generator::generate_email_address;
@@ -25,7 +26,7 @@ pub async fn create_temporary_email(
         let address = generate_email_address(username.clone(), domain);
 
         // 2. Get fresh timestamps for every attempt, using NaiveDateTime.
-        let created_at = Utc::now().naive_utc();
+        let created_at = Utc::now();
         let expires_at = created_at + Duration::minutes(ttl_minutes);
 
         // 3. Attempt to insert the new record into the database.
@@ -79,3 +80,88 @@ fn is_unique_violation(e: &sqlx::Error) -> bool {
     false
 }
 
+/// Saves a new received email to the database.
+pub async fn save_received_email(
+    pool: &PgPool,
+    email: &NewReceivedEmail<'_>,
+) -> Result<RecievedEmail, sqlx::Error> {
+    let record = sqlx::query_as!(
+        RecievedEmail,
+        r#"
+        INSERT INTO received_emails (id, temp_email_id, from_address, subject, body_plain, body_html, headers, size_bytes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, temp_email_id, from_address, subject, body_plain, body_html, headers, received_at, size_bytes
+        "#,
+        Uuid::new_v4(),
+        email.temp_email_id,
+        email.from_address,
+        email.subject,
+        email.body_plain,
+        email.body_html,
+        email.headers,
+        email.size_bytes
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(record)
+}
+
+/// Lists email summaries for a given temporary email address.
+pub async fn list_email_summaries_by_address(
+    pool: &PgPool,
+    address: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<EmailSummary>, sqlx::Error> {
+    let records = sqlx::query_as!(
+        EmailSummary,
+        r#"
+        SELECT e.id,
+               e.from_address,
+               e.subject,
+               e.received_at,
+               LEFT(COALESCE(e.body_plain, e.body_html), 120) AS preview
+        FROM received_emails e
+        JOIN temporary_emails t ON e.temp_email_id = t.id
+        WHERE t.address = $1
+        ORDER BY e.received_at DESC
+        LIMIT $2 OFFSET $3
+        "#,
+        address,
+        limit,
+        offset
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(records)
+}
+
+/// Fetches full email detail by id, ensuring it belongs to the given temp address.
+pub async fn get_email_detail_by_address(
+    pool: &PgPool,
+    address: &str,
+    email_id: Uuid,
+) -> Result<Option<EmailDetail>, sqlx::Error> {
+    let record = sqlx::query_as!(
+        EmailDetail,
+        r#"
+        SELECT e.id,
+               e.from_address,
+               e.subject,
+               e.body_plain,
+               e.body_html,
+               e.received_at
+        FROM received_emails e
+        JOIN temporary_emails t ON e.temp_email_id = t.id
+        WHERE t.address = $1 AND e.id = $2
+        "#,
+        address,
+        email_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(record)
+}

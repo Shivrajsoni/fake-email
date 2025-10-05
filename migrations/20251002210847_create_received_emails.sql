@@ -6,7 +6,7 @@ CREATE TABLE received_emails (
     body_plain TEXT,
     body_html TEXT,
     headers JSONB,
-    received_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     size_bytes INTEGER,
     
     -- Prevent email bombing

@@ -12,6 +12,8 @@ sqlx = { workspace = true, features = ["runtime-tokio-native-tls", "postgres"] }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+smtp-server = { path = "../smtp-server" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tower-http = { workspace = true, features = ["cors"] }
+uuid = { workspace = true }
