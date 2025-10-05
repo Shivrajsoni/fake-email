@@ -1,7 +1,9 @@
 use crate::models::temp_address::TempEmailAddress;
+use crate::models::email::{EmailSummary, EmailDetail, RecievedEmail};
 use crate::services::error::ServiceError;
 use crate::services::generator::generate_email_address;
 use chrono::{Duration, Utc};
+use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
