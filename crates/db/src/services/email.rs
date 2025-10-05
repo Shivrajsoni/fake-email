@@ -1,4 +1,5 @@
 use crate::models::temp_address::TempEmailAddress;
+use crate::models::email::{RecievedEmail, EmailSummary, EmailDetail, NewReceivedEmail};
 use crate::services::error::ServiceError;
 use crate::services::generator::generate_email_address;
 use chrono::{Duration, Utc};

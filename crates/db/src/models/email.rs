@@ -30,3 +30,14 @@ pub struct EmailDetail {
     pub body_html: Option<String>,
     pub received_at: DateTime<Utc>,
 }
+
+// DTO for creating new received emails
+pub struct NewReceivedEmail<'a> {
+    pub temp_email_id: Uuid,
+    pub from_address: &'a str,
+    pub subject: Option<&'a str>,
+    pub body_plain: Option<String>,
+    pub body_html: Option<String>,
+    pub headers: Value,
+    pub size_bytes: i32,
+}
