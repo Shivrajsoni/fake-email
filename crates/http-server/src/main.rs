@@ -64,6 +64,10 @@ async fn main() {
             "/api/email/:address/:email_id",
             delete(api::email::delete_email_by_id),
         )
+        .route(
+            "/api/email/:address/all",
+            delete(api::email::delete_all_emails_handler),
+        )
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 

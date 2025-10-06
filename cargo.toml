@@ -6,7 +6,7 @@ members = [
   # Reusable Libraries 
 ]
 
-resolver  = "3"
+resolver  = "2"
 
 
 [workspace.dependencies]

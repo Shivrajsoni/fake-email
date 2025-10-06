@@ -215,3 +215,34 @@ pub async fn delete_email_by_id_handler(
         Ok(None)
     }
 }
+
+/// Deletes all emails associated with a given temporary email address.
+/// Returns the number of deleted emails.
+pub async fn delete_all_emails_by_address(
+    pool: &PgPool,
+    address: &str,
+) -> Result<u64, sqlx::Error> {
+    // Find the temp_email_id associated with the address
+    let temp_email = sqlx::query!(
+        "SELECT id FROM temporary_emails WHERE address = $1",
+        address
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(record) = temp_email {
+        let temp_email_id = record.id;
+        // Delete all emails linked to this temp_email_id
+        let deleted_rows = sqlx::query!(
+            "DELETE FROM received_emails WHERE temp_email_id = $1",
+            temp_email_id
+        )
+        .execute(pool)
+        .await?
+        .rows_affected();
+        Ok(deleted_rows)
+    } else {
+        // If the temp address doesn't exist, no emails can be deleted.
+        Ok(0)
+    }
+}

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Safely construct the URL to prevent duplicate slashes or paths
-    const baseUrl = process.env.BACKEND_URL;
+    const baseUrl = process.env.BACKEND_URL.replace(/\/$/, ""); // Remove trailing slash
     const backendUrl = `${baseUrl}/api/email/${address}/summaries`;
 
     const backendResponse = await fetch(backendUrl, {

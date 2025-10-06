@@ -19,6 +19,8 @@ use db::{
     },
 };
 use serde::Deserialize;
+use db::services::email::delete_all_emails_by_address;
+use serde::Serialize;
 use uuid::Uuid;
 
 const MIN_TTL_MINUTES: u64 = 10;
@@ -52,7 +54,7 @@ pub async fn generate_email_handler(
     )
     .await?;
 
-    // 4. Transform the database model into the API response DTO.
+    // 4. Transform the database model into the API response DTO.s
     let response = TempEmailResponse {
         address: temp_email.address,
         // The `created_at` field is now already a `DateTime<Utc>`.
@@ -162,4 +164,34 @@ pub async fn delete_email_by_id(
             "Email not found for this address".to_string(),
         )),
     }
+}
+
+#[derive(Serialize)]
+pub struct DeleteAllResponse {
+    pub deleted_count: u64,
+}
+
+/// DELETE /api/email/:address/all
+#[axum::debug_handler]
+pub async fn delete_all_emails_handler(
+    State(app_state): State<AppState>,
+    Path(address): Path<String>,
+) -> Result<Json<DeleteAllResponse>, ApiError> {
+    // First, check if the temporary address exists and is valid
+    let exists = find_by_address(&app_state.db_pool, &address)
+        .await
+        .map_err(db_error_to_api)?;
+
+    if exists.is_none() {
+        return Err(ApiError::NotFound(
+            "Temporary address not found or expired".to_string(),
+        ));
+    }
+
+    // Now, proceed with deletion
+    let deleted_count = delete_all_emails_by_address(&app_state.db_pool, &address)
+        .await
+        .map_err(db_error_to_api)?;
+
+    Ok(Json(DeleteAllResponse { deleted_count }))
 }
