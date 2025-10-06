@@ -12,7 +12,8 @@ use db::{
     },
     services::{
         email::{
-            create_temporary_email, get_email_detail_by_address, list_email_summaries_by_address,
+            create_temporary_email, delete_email_by_id_handler, get_email_detail_by_address,
+            list_email_summaries_by_address,
         },
         temp_address::find_by_address,
     },
@@ -130,4 +131,35 @@ pub async fn get_email_detail_handler(
 
 fn db_error_to_api(e: sqlx::Error) -> ApiError {
     ApiError::Database(db::services::error::ServiceError::DatabaseError(e))
+}
+
+/// DELETE /api/email/:address/:email_id
+#[axum::debug_handler]
+pub async fn delete_email_by_id(
+    State(app_state): State<AppState>,
+    Path((address, email_id)): Path<(String, Uuid)>,
+) -> Result<Json<EmailDetail>, ApiError> {
+    // First, check if the temporary address exists and is valid
+    let exists = find_by_address(&app_state.db_pool, &address)
+        .await
+        .map_err(db_error_to_api)?;
+
+    if exists.is_none() {
+        return Err(ApiError::NotFound(
+            "Temporary address not found or expired".to_string(),
+        ));
+    }
+
+    // Call the service layer to delete the email
+    let deleted_item = delete_email_by_id_handler(&app_state.db_pool, &address, email_id)
+        .await
+        .map_err(db_error_to_api)?;
+
+    // Return the deleted email details or error if not found
+    match deleted_item {
+        Some(email_detail) => Ok(Json(email_detail)),
+        None => Err(ApiError::NotFound(
+            "Email not found for this address".to_string(),
+        )),
+    }
 }

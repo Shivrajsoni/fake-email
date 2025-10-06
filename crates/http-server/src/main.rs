@@ -1,4 +1,5 @@
 use crate::core::{AppConfig, AppState};
+use axum::routing::delete;
 use axum::{Router, routing::get as get_route, routing::post};
 use dotenv::dotenv;
 use sqlx::PgPool;
@@ -59,11 +60,15 @@ async fn main() {
             "/api/email/:address/:email_id",
             get_route(api::email::get_email_detail_handler),
         )
+        .route(
+            "/api/email/:address/:email_id",
+            delete(api::email::delete_email_by_id),
+        )
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
     // --- Start HTTP Server ---
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
     println!("HTTP Server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let server = axum::serve(listener, app);

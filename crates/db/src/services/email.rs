@@ -13,8 +13,6 @@ const UNIQUE_VIOLATION_CODE: &str = "23505";
 /// This function orchestrates the generation of a new email address and its
 /// insertion into the database. It uses an optimistic retry mechanism.
 /// It will try to generate and insert an address up to `MAX_RETRIES` times.
-/// If an insert fails due to a unique constraint violation (meaning the randomly
-/// generated address already exists), it will loop and try again with a new address.
 pub async fn create_temporary_email(
     pool: &PgPool,
     username: Option<String>,
@@ -162,6 +160,58 @@ pub async fn get_email_detail_by_address(
     )
     .fetch_optional(pool)
     .await?;
-
     Ok(record)
+}
+
+/// Deletes an email by ID, ensuring it belongs to the given temporary address.
+/// First checks if the email exists and belongs to the temp address, then deletes it.
+/// Returns the deleted email details if successful, None if email doesn't exist or doesn't belong to the address.
+pub async fn delete_email_by_id_handler(
+    pool: &PgPool,
+    address: &str,
+    email_id: Uuid,
+) -> Result<Option<EmailDetail>, sqlx::Error> {
+    // First, check if the email exists and belongs to the given temporary address
+    let record = sqlx::query_as!(
+        EmailDetail,
+        r#"
+        SELECT e.id,
+               e.from_address,
+               e.subject,
+               e.body_plain,
+               e.body_html,
+               e.received_at
+        FROM received_emails e
+        JOIN temporary_emails t ON e.temp_email_id = t.id
+        WHERE t.address = $1 AND e.id = $2
+        "#,
+        address,
+        email_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    // If the email doesn't exist or doesn't belong to this temp address, return None
+    if record.is_none() {
+        return Ok(None);
+    }
+
+    // Now delete the email since we confirmed it exists and belongs to the temp address
+    let deleted_count = sqlx::query!(
+        r#"
+        DELETE FROM received_emails 
+        WHERE id = $1
+        "#,
+        email_id
+    )
+    .execute(pool)
+    .await?
+    .rows_affected();
+
+    // Return the email details if deletion was successful
+    if deleted_count > 0 {
+        Ok(record)
+    } else {
+        Ok(None)
+    }
 }
