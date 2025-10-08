@@ -1,6 +1,5 @@
 use crate::models::temp_address::TempEmailAddress;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 /// Finds an active, non-expired temporary email address by its address string.
 pub async fn find_by_address(
