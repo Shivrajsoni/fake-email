@@ -14,4 +14,7 @@ mail-parser = { workspace = true }
 uuid = { workspace = true }
 
 db = { path = "../db" }
+dotenvy = "0.15"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 

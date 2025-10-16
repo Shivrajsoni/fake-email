@@ -7,12 +7,13 @@ edition = "2021"
 axum = { workspace = true, features = ["macros"] }
 chrono = { workspace = true, features = ["serde"] }
 db = {path = "../db"}
-dotenv = { workspace = true }
+dotenvy = "0.15"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio-native-tls", "postgres"] }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-smtp-server = { path = "../smtp-server" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tower-http = { workspace = true, features = ["cors"] }
