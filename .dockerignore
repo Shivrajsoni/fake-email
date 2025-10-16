@@ -1,0 +1,16 @@
+# Git version control
+.git
+
+# Rust build artifacts
+target/
+
+# Local environment files
+.env*
+
+# Node.js dependencies from the UI project
+ui/node_modules/
+ui/.next/
+
+# IDE configuration
+.idea/
+.vscode/
