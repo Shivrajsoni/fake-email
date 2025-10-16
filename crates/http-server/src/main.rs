@@ -10,14 +10,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::CorsLayer;
-use tracing::info;
+use tracing::{error, info};
 
 // Declare the modules we created.
 mod api;
 mod core;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables from a .env file.
     dotenv().ok();
     // Use a JSON logger for production-ready structured logging
@@ -34,9 +34,16 @@ async fn main() {
 
     // --- Database Pool ---
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let db_pool = PgPool::connect(&database_url)
-        .await
-        .expect("Failed to create database pool");
+    let db_pool = match PgPool::connect(&database_url).await {
+        Ok(pool) => {
+            info!("Database pool created successfully.");
+            pool
+        }
+        Err(e) => {
+            error!("Failed to create database pool: {}", e);
+            return Err(e.into());
+        }
+    };
 
     // Wrap the pool in an Arc for shared ownership
     let db_pool_arc = Arc::new(db_pool);
@@ -68,8 +75,16 @@ async fn main() {
     // --- Start HTTP Server ---
     // Bind to 0.0.0.0 to be reachable in a container
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!("HTTP Server listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => {
+            info!("HTTP Server listening on {}", addr);
+            listener
+        }
+        Err(e) => {
+            error!("Failed to bind to address {}: {}", addr, e);
+            return Err(e.into());
+        }
+    };
     let server = axum::serve(listener, app);
 
     // Background cleanup task
@@ -88,6 +103,8 @@ async fn main() {
     });
 
     if let Err(e) = server.await {
-        tracing::error!("Server error: {}", e);
+        error!("Server error: {}", e);
     }
+
+    Ok(())
 }

@@ -13,6 +13,8 @@ pub enum SmtpServerError {
     IoError(#[from] std::io::Error),
     #[error("Database error: {0}")]
     DbError(#[from] sqlx::Error),
+    #[error("Failed to parse email content")]
+    ParseError,
 }
 
 /// Represents the state of an SMTP session.
@@ -31,6 +33,7 @@ pub enum SmtpState {
 
 /// The main entry point for the SMTP server.
 /// It binds to the port and enters a loop to accept new connections.
+
 pub async fn run_smtp_server(db_pool: Arc<PgPool>) -> Result<(), SmtpServerError> {
     let port = std::env::var("SMTP_PORT")
         .ok()
@@ -174,8 +177,14 @@ async fn save_email(
     db: &PgPool,
     temp_address: &db::models::temp_address::TempEmailAddress,
     raw_email: &[u8],
-) -> Result<(), sqlx::Error> {
-    let message = MessageParser::default().parse(raw_email).unwrap();
+) -> Result<(), SmtpServerError> {
+    let message = match MessageParser::default().parse(raw_email) {
+        Ok(msg) => msg,
+        Err(e) => {
+            error!("Failed to parse email for {}: {}", temp_address.address, e);
+            return Err(SmtpServerError::ParseError);
+        }
+    };
 
     // Extract the 'from' address into an owned String so it has a stable lifetime.
     let from_address_str = message
