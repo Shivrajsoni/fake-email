@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: http-server
+    env: rust
+    dockerfilePath: ./http-server.Dockerfile
+    healthCheckPath: /health
+    startCommand: sqlx migrate run --source ./migrations && ./http-server
+    envVars:
+      - key: DATABASE_URL
+        value: ${DATABASE_URL}
+      - key: RUST_LOG
+        value: info
+      - key: DOMAIN
+        value: ${DOMAIN} # Replace with your domain
+      - key: PORT
+        value: ${PORT}
+    buildFilter:
+      paths:
+        - crates/http-server/**
+        - crates/db/**
+        - migrations/**
+        - Cargo.toml
+        - Cargo.lock
+        - http-server.Dockerfile
+  - type: web
+    name: smtp-server
+    env: rust
+    dockerfilePath: ./smtp-server.Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        value: ${DATABASE_URL}
+      - key: RUST_LOG
+        value: info
+      - key: DOMAIN
+        value: ${DOMAIN} # Replace with your domain
+      - key: SMTP_PORT
+        value: ${SMTP_PORT}
+ 
+    buildFilter:
+      paths:
+        - crates/smtp-server/**
+        - crates/db/**
+        - Cargo.toml
+        - Cargo.lock
+        - smtp-server.Dockerfile
+
+
