@@ -1,34 +1,30 @@
-# Filename: http-server.Dockerfile
+# Stage 1: Build the application
+FROM rust:1.73 as builder
 
-# === Stage 1: Build Environment ===
-# Use the same Nixpacks base image to get Nix and other build tools.
-FROM ghcr.io/railwayapp/nixpacks:ubuntu-1741046653
-WORKDIR /app
+# Create a new empty workspace
+WORKDIR /usr/src/app
+RUN cargo init --bin
 
-# Copy the .nixpacks directory which defines our Rust toolchain
-COPY .nixpacks .nixpacks
-# Install the Nix environment
-RUN nix-env -if .nixpacks/nixpkgs-ef56e777fedaa4da8c66a150081523c5de1e0171.nix && nix-collect-garbage -d
+# Copy the local dependencies
+COPY ./crates/db /usr/src/app/crates/db
+COPY ./crates/http-server /usr/src/app/crates/http-server
 
-# Copy the entire source code into the build container.
-COPY . .
+# Copy the Cargo.toml files
+COPY ./Cargo.toml /usr/src/app/Cargo.toml
+COPY ./crates/db/Cargo.toml /usr/src/app/crates/db/Cargo.toml
+COPY ./crates/http-server/Cargo.toml /usr/src/app/crates/http-server/Cargo.toml
 
-# Build ONLY the http-server binary in release mode.
-# This is more efficient than building the whole workspace if you don't need it.
-RUN --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
-    --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
-    --mount=type=cache,id=cargo-target,target=/app/target \
-    cargo build --release --bin http-server
+# Build the application
+RUN cargo build --release --bin http-server
 
-# === Stage 2: Runtime Environment ===
-# Start from a minimal, clean Ubuntu image.
-FROM ubuntu:jammy
-WORKDIR /app
+# Stage 2: Create the runtime image
+FROM debian:buster-slim
 
-# Copy the compiled binary from the build stage.
-COPY --from=0 /app/target/release/http-server .
-# Copy migration files for running migrations from the container
-COPY migrations ./migrations
+# Copy the binary from the builder stage
+COPY --from=builder /usr/src/app/target/release/http-server /usr/local/bin/http-server
 
-# The command to run when the container starts.
-CMD ["./http-server"]
+# Copy the migrations
+COPY ./migrations /usr/src/app/migrations
+
+# Set the command to run the application
+CMD ["/usr/local/bin/http-server"]

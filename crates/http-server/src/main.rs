@@ -69,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/email/:address/:email_id",
             get(api::email::get_email_detail_handler).delete(api::email::delete_email_by_id),
         )
+        .route("/health", get(|| async { axum::http::StatusCode::OK }))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
