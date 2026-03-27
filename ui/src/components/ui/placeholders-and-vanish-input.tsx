@@ -150,29 +150,30 @@ export function PlaceholdersAndVanishInput({
     animateFrame(start);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !animating) {
-      vanishAndSubmit();
-    }
-  };
-
   const vanishAndSubmit = () => {
+    const current = inputRef.current?.value?.trim() ?? "";
+    if (!current) {
+      return;
+    }
     setAnimating(true);
     draw();
 
-    const value = inputRef.current?.value || "";
-    if (value && inputRef.current) {
-      const maxX = newDataRef.current.reduce(
-        (prev, current) => (current.x > prev ? current.x : prev),
-        0
-      );
-      animate(maxX);
-    }
+    const maxX = newDataRef.current.reduce(
+      (prev, particle) => (particle.x > prev ? particle.x : prev),
+      0
+    );
+    animate(maxX);
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    vanishAndSubmit();
+    if (animating) {
+      return;
+    }
+    const trimmed = inputRef.current?.value?.trim() ?? "";
+    if (trimmed) {
+      vanishAndSubmit();
+    }
     onSubmit(e);
   };
   return (
@@ -199,7 +200,6 @@ export function PlaceholdersAndVanishInput({
             onChange(e);
           }
         }}
-        onKeyDown={handleKeyDown}
         ref={inputRef}
         value={value}
         type="text"
@@ -212,6 +212,8 @@ export function PlaceholdersAndVanishInput({
       <button
         disabled={!value}
         type="submit"
+        aria-label="Generate email address"
+        title="Generate email address"
         className="absolute right-2 top-1/2 z-50 -translate-y-1/2 h-8 w-8 rounded-full disabled:bg-gray-100 bg-black dark:bg-zinc-900 dark:disabled:bg-zinc-800 transition duration-200 flex items-center justify-center"
       >
         <motion.svg

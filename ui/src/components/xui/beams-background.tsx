@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 
 interface AnimatedGradientBackgroundProps {
   className?: string;
-  children?: React.ReactNode;
   intensity?: "subtle" | "medium" | "strong";
 }
 

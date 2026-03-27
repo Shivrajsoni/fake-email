@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+  <title>Fake Email</title>
+  <defs>
+    <linearGradient id="fe-accent" x1="6" y1="9" x2="27" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="0.45" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <!-- matches app shell: neutral-950, zinc-700 border -->
+  <rect width="32" height="32" rx="8" fill="#09090b"/>
+  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="7.25" stroke="#3f3f46" stroke-width="1.15"/>
+  <!-- mail icon -->
+  <path
+    fill="url(#fe-accent)"
+    fill-opacity="0.18"
+    d="M8 12.25h16A1.25 1.25 0 0 1 25.25 13.5v7A1.25 1.25 0 0 1 24 21.75H8A1.25 1.25 0 0 1 6.75 20.5v-7A1.25 1.25 0 0 1 8 12.25z"
+  />
+  <path
+    stroke="url(#fe-accent)"
+    stroke-width="1.7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M6.75 13 16 19l9.25-6M6.75 20.15V13M25.25 20.15V13"
+  />
+</svg>

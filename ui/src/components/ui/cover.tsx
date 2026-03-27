@@ -105,7 +105,7 @@ export const Cover = memo(function Cover({
         )}
       </AnimatePresence>
       {beamPositions.map((position, index) => (
-        <Beam
+        <CoverBeam
           key={index}
           hovered={hovered}
           duration={beamMotion[index]?.duration ?? 2}
@@ -157,15 +157,15 @@ export const Cover = memo(function Cover({
       >
         {children}
       </motion.span>
-      <CircleIcon className="absolute -right-[2px] -top-[2px]" />
-      <CircleIcon className="absolute -bottom-[2px] -right-[2px]" delay={0.4} />
-      <CircleIcon className="absolute -left-[2px] -top-[2px]" delay={0.8} />
-      <CircleIcon className="absolute -bottom-[2px] -left-[2px]" delay={1.6} />
+      <CoverCornerDot className="absolute -right-[2px] -top-[2px]" />
+      <CoverCornerDot className="absolute -bottom-[2px] -right-[2px]" />
+      <CoverCornerDot className="absolute -left-[2px] -top-[2px]" />
+      <CoverCornerDot className="absolute -bottom-[2px] -left-[2px]" />
     </div>
   );
 });
 
-export const Beam = ({
+function CoverBeam({
   className,
   delay,
   duration,
@@ -182,7 +182,7 @@ export const Beam = ({
   hoverDelay?: number;
   hoverRepeatDelay?: number;
   width?: number;
-} & ComponentProps<typeof motion.svg>) => {
+} & ComponentProps<typeof motion.svg>) {
   const id = useId();
 
   return (
@@ -234,20 +234,15 @@ export const Beam = ({
       </defs>
     </motion.svg>
   );
-};
+}
 
-export const CircleIcon = ({
-  className,
-}: {
-  className?: string;
-  delay?: number;
-}) => {
+function CoverCornerDot({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        `pointer-events-none animate-pulse group-hover/cover:hidden group-hover/cover:opacity-100 group h-2 w-2 rounded-full bg-neutral-600 dark:bg-white opacity-20 group-hover/cover:bg-white`,
+        "pointer-events-none animate-pulse group-hover/cover:hidden group-hover/cover:opacity-100 group h-2 w-2 rounded-full bg-neutral-600 opacity-20 group-hover/cover:bg-white dark:bg-white",
         className
       )}
-    ></div>
+    />
   );
-};
+}

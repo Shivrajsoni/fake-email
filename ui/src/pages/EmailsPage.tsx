@@ -1,3 +1,4 @@
+import { MailboxAvatar } from "@/components/mailbox-avatar";
 import { Cover } from "@/components/ui/cover";
 import { EmailView, type EmailDetail } from "@/components/ui/email-view";
 import {
@@ -7,6 +8,7 @@ import {
   listEmailSummaries,
   type EmailSummary,
 } from "@/lib/api";
+import { Helmet } from "react-helmet-async";
 import {
   memo,
   useCallback,
@@ -44,7 +46,7 @@ const EmailListItem = memo(function EmailListItem({
 
   return (
     <li
-      className="border border-zinc-800 rounded-lg p-4 hover:bg-zinc-800/50 transition-colors cursor-pointer [contain:layout_paint]"
+      className="border border-zinc-800 rounded-lg p-4 hover:bg-zinc-800/50 transition-colors cursor-pointer contain-paint"
       onClick={() => onOpen(email.id)}
     >
       <div className="flex justify-between items-baseline">
@@ -261,11 +263,24 @@ export function EmailsPage() {
 
   return (
     <main className="min-h-screen bg-zinc-900 text-white p-4 sm:p-8">
+      <Helmet>
+        <title>Inbox — Fake Email</title>
+        <meta
+          name="description"
+          content="Temporary mailbox inbox. This page is not indexed by search engines."
+        />
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
       <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-start mb-4">
-          <h1 className="text-3xl md:text-4xl font-bold text-zinc-100">
-            Your Temporary Inbox
-          </h1>
+        <div className="flex justify-between items-start gap-4 mb-4">
+          <div className="flex items-center gap-4 min-w-0">
+            {tempAddress ? (
+              <MailboxAvatar address={tempAddress} className="max-sm:h-10 max-sm:w-10 max-sm:text-xs" />
+            ) : null}
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-zinc-100">
+              Your Temporary Inbox
+            </h1>
+          </div>
           {emails.length > 0 && (
             <button
               type="button"

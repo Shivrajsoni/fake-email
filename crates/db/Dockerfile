@@ -1,20 +1,8 @@
-# Must match runtime glibc: rust:latest often tracks newer Debian (e.g. GLIBC_2.39)
-# while debian:bookworm-slim is older — sqlx would fail at runtime.
+# sqlx CLI only — no workspace compile. Builder and runtime use Debian Bookworm
+# (same glibc family) so the copied binary runs on debian:bookworm-slim.
+# Docker on Ubuntu Server uses these Linux images like any other host.
 FROM rust:1-bookworm AS builder
 
-WORKDIR /app
-
-COPY Cargo.toml ./Cargo.toml
-COPY crates/db/Cargo.toml crates/db/Cargo.toml
-COPY crates/http-server/Cargo.toml crates/http-server/Cargo.toml
-COPY crates/smtp-server/Cargo.toml crates/smtp-server/Cargo.toml
-COPY migrations migrations
-
-COPY crates/db/src crates/db/src
-COPY crates/http-server/src crates/http-server/src
-COPY crates/smtp-server/src crates/smtp-server/src
-
-ENV SQLX_OFFLINE=true
 RUN cargo install sqlx-cli --version 0.7.4 --no-default-features --features native-tls,postgres
 
 FROM debian:bookworm-slim AS runtime

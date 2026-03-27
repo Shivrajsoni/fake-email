@@ -1,14 +1,16 @@
-# Same glibc family as debian:bookworm-slim runtime (see crates/db/Dockerfile).
+# Multi-stage build: Debian Bookworm toolchain + slim runtime (matches glibc).
+# Runs the same on Ubuntu, macOS, etc.: the engine executes Linux containers.
 FROM rust:1-bookworm AS builder
 
 WORKDIR /app
 
-# Linux containers are case-sensitive; keep canonical manifest name.
+# Linux filesystems are case-sensitive — root workspace manifest must be Cargo.toml.
 COPY Cargo.toml ./Cargo.toml
 COPY crates/db/Cargo.toml crates/db/Cargo.toml
 COPY crates/http-server/Cargo.toml crates/http-server/Cargo.toml
 COPY crates/smtp-server/Cargo.toml crates/smtp-server/Cargo.toml
 
+COPY .sqlx ./.sqlx
 COPY crates/db/src crates/db/src
 COPY crates/http-server/src crates/http-server/src
 COPY crates/smtp-server/src crates/smtp-server/src
@@ -29,5 +31,6 @@ COPY --from=builder /app/target/release/http-server /usr/local/bin/http-server
 
 USER app
 
+# Listener port comes from env PORT (Compose sets HTTP_PORT).
 EXPOSE 3001
 ENTRYPOINT ["/usr/local/bin/http-server"]
