@@ -1,7 +1,9 @@
 target/
 .env
+.fake-email-start.lock.dir/
 **/*.rs.bk
 Cargo.lock
 .next/
 .DS_Store
+
 

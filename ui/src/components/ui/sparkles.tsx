@@ -1,8 +1,11 @@
-"use client";
-import React, { useId, useMemo } from "react";
-import { useEffect, useState } from "react";
+import { memo, useId, useEffect, useMemo, useState } from "react";
 import Particles, { initParticlesEngine } from "@tsparticles/react";
-import type { Container, SingleOrMultiple } from "@tsparticles/engine";
+import type {
+  Container,
+  IOptions,
+  RecursivePartial,
+  SingleOrMultiple,
+} from "@tsparticles/engine";
 import { loadSlim } from "@tsparticles/slim";
 import { cn } from "@/lib/utils";
 import { motion, useAnimation } from "motion/react";
@@ -17,8 +20,15 @@ type ParticlesProps = {
   speed?: number;
   particleColor?: string;
   particleDensity?: number;
+  /** Click-to-spawn particles; off by default (saves main-thread work). */
+  interactiveClick?: boolean;
+  /** Cap engine FPS (lower = less CPU). */
+  fpsLimit?: number;
+  /** High-DPI multiplies particle count; off is better for small regions (e.g. badges). */
+  detectRetina?: boolean;
 };
-export const SparklesCore = (props: ParticlesProps) => {
+
+function SparklesCoreInner(props: ParticlesProps) {
   const {
     id,
     className,
@@ -28,6 +38,9 @@ export const SparklesCore = (props: ParticlesProps) => {
     speed,
     particleColor,
     particleDensity,
+    interactiveClick = false,
+    fpsLimit = 55,
+    detectRetina = true,
   } = props;
   const [init, setInit] = useState(false);
   useEffect(() => {
@@ -51,14 +64,9 @@ export const SparklesCore = (props: ParticlesProps) => {
   };
 
   const generatedId = useId();
-  return (
-    <motion.div animate={controls} className={cn("opacity-0", className)}>
-      {init && (
-        <Particles
-          id={id || generatedId}
-          className={cn("h-full w-full")}
-          particlesLoaded={particlesLoaded}
-          options={{
+
+  const particleOptions = useMemo(
+    () => ({
             background: {
               color: {
                 value: background || "#0d47a1",
@@ -69,18 +77,19 @@ export const SparklesCore = (props: ParticlesProps) => {
               zIndex: 1,
             },
 
-            fpsLimit: 120,
+            fpsLimit,
             interactivity: {
               events: {
                 onClick: {
-                  enable: true,
-                  mode: "push",
+                  enable: interactiveClick,
+                  mode: "push" as const,
                 },
                 onHover: {
                   enable: false,
                   mode: "repulse",
                 },
-                resize: true as any,
+                // tsparticles types expect a resize config object; boolean works at runtime
+                resize: true as never,
               },
               modes: {
                 push: {
@@ -425,10 +434,34 @@ export const SparklesCore = (props: ParticlesProps) => {
                 speed: 1,
               },
             },
-            detectRetina: true,
-          }}
+            detectRetina,
+    }),
+    [
+      background,
+      fpsLimit,
+      interactiveClick,
+      maxSize,
+      minSize,
+      particleColor,
+      particleDensity,
+      speed,
+      detectRetina,
+    ]
+  );
+
+  return (
+    <motion.div animate={controls} className={cn("opacity-0", className)}>
+      {init && (
+        <Particles
+          id={id || generatedId}
+          className={cn("h-full w-full")}
+          particlesLoaded={particlesLoaded}
+          options={particleOptions as RecursivePartial<IOptions>}
         />
       )}
     </motion.div>
   );
-};
+}
+
+export const SparklesCore = memo(SparklesCoreInner);
+export default SparklesCore;

@@ -1,17 +1,27 @@
-"use client";
-import React, { useEffect, useId, useState } from "react";
+import {
+  lazy,
+  memo,
+  Suspense,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { useRef } from "react";
 import { cn } from "@/lib/utils";
-import { SparklesCore } from "@/components/ui/sparkles";
 
-export const Cover = ({
+const LazySparklesCore = lazy(() => import("@/components/ui/sparkles"));
+
+export const Cover = memo(function Cover({
   children,
   className,
 }: {
-  children?: React.ReactNode;
+  children?: ReactNode;
   className?: string;
-}) => {
+}) {
   const [hovered, setHovered] = useState(false);
 
   const ref = useRef<HTMLDivElement>(null);
@@ -20,18 +30,30 @@ export const Cover = ({
   const [beamPositions, setBeamPositions] = useState<number[]>([]);
 
   useEffect(() => {
-    if (ref.current) {
-      setContainerWidth(ref.current?.clientWidth ?? 0);
+    const el = ref.current;
+    if (el) {
+      setContainerWidth(el.clientWidth ?? 0);
 
-      const height = ref.current?.clientHeight ?? 0;
-      const numberOfBeams = Math.floor(height / 10); // Adjust the divisor to control the spacing
+      const height = el.clientHeight ?? 0;
+      const numberOfBeams = Math.floor(height / 10);
       const positions = Array.from(
         { length: numberOfBeams },
         (_, i) => (i + 1) * (height / (numberOfBeams + 1))
       );
       setBeamPositions(positions);
     }
-  }, [ref.current]);
+  }, []);
+
+  const beamMotion = useMemo(
+    () =>
+      beamPositions.map(() => ({
+        duration: Math.random() * 2 + 1,
+        delay: Math.random() * 2 + 1,
+        hoverDelay: Math.random() * 0.8 + 0.2,
+        hoverRepeatDelay: Math.random() + 1,
+      })),
+    [beamPositions]
+  );
 
   return (
     <div
@@ -66,22 +88,18 @@ export const Cover = ({
               }}
               className="w-[200%] h-full flex"
             >
-              <SparklesCore
-                background="transparent"
-                minSize={0.4}
-                maxSize={1}
-                particleDensity={500}
-                className="w-full h-full"
-                particleColor="#FFFFFF"
-              />
-              <SparklesCore
-                background="transparent"
-                minSize={0.4}
-                maxSize={1}
-                particleDensity={500}
-                className="w-full h-full"
-                particleColor="#FFFFFF"
-              />
+              <Suspense fallback={null}>
+                <LazySparklesCore
+                  background="transparent"
+                  minSize={0.4}
+                  maxSize={1}
+                  particleDensity={140}
+                  className="w-full h-full"
+                  particleColor="#FFFFFF"
+                  fpsLimit={45}
+                  detectRetina={false}
+                />
+              </Suspense>
             </motion.div>
           </motion.div>
         )}
@@ -90,8 +108,10 @@ export const Cover = ({
         <Beam
           key={index}
           hovered={hovered}
-          duration={Math.random() * 2 + 1}
-          delay={Math.random() * 2 + 1}
+          duration={beamMotion[index]?.duration ?? 2}
+          delay={beamMotion[index]?.delay ?? 1}
+          hoverDelay={beamMotion[index]?.hoverDelay ?? 0.2}
+          hoverRepeatDelay={beamMotion[index]?.hoverRepeatDelay ?? 1.2}
           width={containerWidth}
           style={{
             top: `${position}px`,
@@ -143,13 +163,15 @@ export const Cover = ({
       <CircleIcon className="absolute -bottom-[2px] -left-[2px]" delay={1.6} />
     </div>
   );
-};
+});
 
 export const Beam = ({
   className,
   delay,
   duration,
   hovered,
+  hoverDelay,
+  hoverRepeatDelay,
   width = 600,
   ...svgProps
 }: {
@@ -157,8 +179,10 @@ export const Beam = ({
   delay?: number;
   duration?: number;
   hovered?: boolean;
+  hoverDelay?: number;
+  hoverRepeatDelay?: number;
   width?: number;
-} & React.ComponentProps<typeof motion.svg>) => {
+} & ComponentProps<typeof motion.svg>) => {
   const id = useId();
 
   return (
@@ -197,8 +221,10 @@ export const Beam = ({
             duration: hovered ? 0.5 : duration ?? 2,
             ease: "linear",
             repeat: Infinity,
-            delay: hovered ? Math.random() * (1 - 0.2) + 0.2 : 0,
-            repeatDelay: hovered ? Math.random() * (2 - 1) + 1 : delay ?? 1,
+            delay: hovered ? (hoverDelay ?? 0.2) : 0,
+            repeatDelay: hovered
+              ? (hoverRepeatDelay ?? 1.2)
+              : (delay ?? 1),
           }}
         >
           <stop stopColor="#2EB9DF" stopOpacity="0" />
@@ -212,7 +238,6 @@ export const Beam = ({
 
 export const CircleIcon = ({
   className,
-  delay,
 }: {
   className?: string;
   delay?: number;
