@@ -1,8 +1,20 @@
 import BeamsBackground from "@/components/xui/beams-background";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { generateMailbox } from "@/lib/api";
-import { useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const SITE_DESCRIPTION =
+  "Create a disposable temporary email address for sign-ups, QA, and privacy. Your inbox updates in real time; mailboxes expire automatically.";
+
+function siteOrigin(): string | undefined {
+  const raw = import.meta.env.VITE_SITE_URL;
+  if (!raw || typeof raw !== "string") {
+    return undefined;
+  }
+  return raw.replace(/\/$/, "");
+}
 
 const placeholders = [
   "Generate Fake Email !",
@@ -47,10 +59,24 @@ export function HomePage() {
     [navigate, username],
   );
 
+  const origin = siteOrigin();
+
   return (
     <div className="relative h-screen w-full flex items-center justify-center">
+      <Helmet>
+        <title>Fake Email — Temporary disposable inbox</title>
+        <meta name="description" content={SITE_DESCRIPTION} />
+        <meta property="og:title" content="Fake Email — Temporary disposable inbox" />
+        <meta property="og:description" content={SITE_DESCRIPTION} />
+        {origin ? (
+          <>
+            <link rel="canonical" href={`${origin}/`} />
+            <meta property="og:url" content={`${origin}/`} />
+          </>
+        ) : null}
+      </Helmet>
       <BeamsBackground className="absolute inset-0 z-0" />
-      <div className="relative z-10 mt-100 flex flex-col items-center">
+      <div className="relative z-10 mt-[min(30vh,15rem)] flex w-full max-w-xl flex-col items-center px-4">
         <PlaceholdersAndVanishInput
           placeholders={placeholders}
           onChange={handleChange}

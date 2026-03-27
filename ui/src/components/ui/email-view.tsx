@@ -1,4 +1,5 @@
-import { memo } from "react";
+import DOMPurify from "dompurify";
+import { memo, useMemo } from "react";
 import type { EmailDetail } from "@/lib/api";
 
 export type { EmailDetail };
@@ -16,12 +17,22 @@ export const EmailView = memo(function EmailView({
   onDelete,
   isDeleting,
 }: EmailViewProps) {
+  const safeHtml = useMemo(
+    () =>
+      email.body_html
+        ? DOMPurify.sanitize(email.body_html, {
+            USE_PROFILES: { html: true },
+          })
+        : null,
+    [email.body_html]
+  );
+
   const renderBody = () => {
-    if (email.body_html) {
+    if (safeHtml) {
       return (
         <div
-          className="prose prose-invert prose-sm md:prose-base max-w-none"
-          dangerouslySetInnerHTML={{ __html: email.body_html }}
+          className="prose prose-invert prose-sm md:prose-base max-w-none prose-headings:text-zinc-100 prose-a:text-sky-400"
+          dangerouslySetInnerHTML={{ __html: safeHtml }}
         />
       );
     }
