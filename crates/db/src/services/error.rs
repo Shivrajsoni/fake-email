@@ -1,10 +1,11 @@
 use thiserror::Error;
 
+/// Errors from the persistence layer (queries and domain rules tied to storage).
 #[derive(Debug, Error)]
-pub enum ServiceError {
-    #[error("Database error: {0}")]
-    DatabaseError(#[from] sqlx::Error),
+pub enum DbError {
+    #[error(transparent)]
+    Sqlx(#[from] sqlx::Error),
 
     #[error("Failed to generate a unique email after {0} attempts.")]
-    FailedToFindUniqueName(usize),
+    FailedToFindUniqueAddress(usize),
 }

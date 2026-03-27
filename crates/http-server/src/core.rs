@@ -3,25 +3,22 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use db::services::error::ServiceError;
+use db::services::error::DbError;
 use serde_json::json;
 use std::sync::Arc;
 use thiserror::Error;
 
-// Define a struct to hold our application's shared state.
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: Arc<sqlx::PgPool>,
-    pub config: AppConfig, // Assuming a config struct
+    pub config: AppConfig,
 }
 
-// A placeholder for your application's configuration.
 #[derive(Clone)]
 pub struct AppConfig {
     pub domain: String,
 }
 
-// Define a custom error type for our API.
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("Invalid input: {0}")]
@@ -30,17 +27,16 @@ pub enum ApiError {
     #[error("Not found: {0}")]
     NotFound(String),
 
-    #[error("Database error")]
-    Database(#[from] ServiceError),
+    #[error(transparent)]
+    Database(#[from] DbError),
 }
 
-// Implement `IntoResponse` for `ApiError` to convert it into an HTTP response.
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, error_message) = match self {
-            ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
-            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
-            ApiError::Database(ServiceError::FailedToFindUniqueName(_)) => (
+        let (status, error_message) = match &self {
+            ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
+            ApiError::Database(DbError::FailedToFindUniqueAddress(_)) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Could not generate a unique email address.".to_string(),
             ),

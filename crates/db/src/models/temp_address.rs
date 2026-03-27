@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
@@ -11,19 +10,4 @@ pub struct TempEmailAddress {
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub is_active: Option<bool>,
-}
-
-// DTO  For API Response
-#[derive(Serialize)]
-pub struct TempEmailResponse {
-    pub address: String,
-    pub created_at: DateTime<Utc>,
-    pub expiry_in_sec: u64,
-}
-
-// DTO for API Request
-#[derive(Deserialize)]
-pub struct TempEmailRequest {
-    pub username: Option<String>,
-    pub ttl_minutes: Option<u64>,
 }

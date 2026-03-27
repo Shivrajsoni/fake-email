@@ -40,7 +40,7 @@ echo "Waiting for database to initialize (5 seconds)..."
 sleep 5
 
 # 4. Set the DATABASE_URL for the migration tool.
-export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${DB_PORT}/${POSTGRES_DB}"
+export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${DB_PORT}/${POSTGRES_DB}?sslmode=disable"
 
 # 5. Run the database migrations using sqlx-cli.
 #    Note: This requires sqlx-cli to be installed.

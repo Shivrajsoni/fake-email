@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
 use serde_json::Value;
+use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -14,7 +14,8 @@ pub struct NewReceivedEmail<'a> {
     pub size_bytes: i32,
 }
 
-pub struct RecievedEmail {
+#[derive(FromRow)]
+pub struct ReceivedEmail {
     pub id: Uuid,
     pub temp_email_id: Uuid,
     pub from_address: String,
@@ -26,7 +27,7 @@ pub struct RecievedEmail {
     pub size_bytes: Option<i32>,
 }
 
-#[derive(Serialize)]
+#[derive(FromRow)]
 pub struct EmailSummary {
     pub id: Uuid,
     pub from_address: String,
@@ -35,7 +36,7 @@ pub struct EmailSummary {
     pub preview: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(FromRow)]
 pub struct EmailDetail {
     pub id: Uuid,
     pub from_address: String,
