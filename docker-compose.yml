@@ -1,3 +1,7 @@
+# Stack matches Docker on Ubuntu Server: Linux containers, no host isolation issues.
+# - EC2 amd64: native build (no extra env).
+# - Apple Silicon dev: match production with: export DOCKER_DEFAULT_PLATFORM=linux/amd64
+#   before `docker compose build` (slower; uses emulation).
 name: fake-email
 
 services:

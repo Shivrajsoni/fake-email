@@ -3,6 +3,7 @@ FROM rust:1-bookworm AS builder
 
 WORKDIR /app
 
+# Same `Cargo.toml` path requirement as http-server (Linux builds).
 COPY Cargo.toml ./Cargo.toml
 COPY crates/db/Cargo.toml crates/db/Cargo.toml
 COPY crates/http-server/Cargo.toml crates/http-server/Cargo.toml

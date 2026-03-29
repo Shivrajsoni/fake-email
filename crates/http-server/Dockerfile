@@ -4,7 +4,7 @@ FROM rust:1-bookworm AS builder
 
 WORKDIR /app
 
-# Linux filesystems are case-sensitive — root workspace manifest must be Cargo.toml.
+# Workspace root must be tracked as `Cargo.toml` (case-sensitive on Linux / Ubuntu CI).
 COPY Cargo.toml ./Cargo.toml
 COPY crates/db/Cargo.toml crates/db/Cargo.toml
 COPY crates/http-server/Cargo.toml crates/http-server/Cargo.toml
