@@ -1,0 +1,57 @@
+# Single workspace compile for http-server + smtp-server: deps built once (saves disk vs two images).
+# On small hosts: build with COMPOSE_PARALLEL_LIMIT=1 (see start.sh) so db-migrate does not compile in parallel.
+FROM rust:1-bookworm AS builder
+
+WORKDIR /app
+
+COPY Cargo.toml ./Cargo.toml
+COPY crates/db/Cargo.toml crates/db/Cargo.toml
+COPY crates/http-server/Cargo.toml crates/http-server/Cargo.toml
+COPY crates/smtp-server/Cargo.toml crates/smtp-server/Cargo.toml
+
+COPY .sqlx ./.sqlx
+COPY crates/db/src crates/db/src
+COPY crates/http-server/src crates/http-server/src
+COPY crates/smtp-server/src crates/smtp-server/src
+
+ENV SQLX_OFFLINE=true
+# Lower peak disk during rustc (avoids "No space left on device" on small EBS volumes).
+ENV CARGO_BUILD_JOBS=1 \
+    CARGO_NET_RETRY=2
+
+RUN cargo build --release -p http-server -p smtp-server \
+    && install -m 0755 target/release/http-server target/release/smtp-server /tmp/ \
+    && rm -rf target /usr/local/cargo/registry /usr/local/cargo/git
+
+FROM debian:bookworm-slim AS runtime-http
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libssl3 tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --uid 10001 app
+
+COPY --from=builder /tmp/http-server /usr/local/bin/http-server
+
+USER app
+
+EXPOSE 3001
+ENTRYPOINT ["/usr/local/bin/http-server"]
+
+FROM debian:bookworm-slim AS runtime-smtp
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libssl3 tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --uid 10001 app
+
+COPY --from=builder /tmp/smtp-server /usr/local/bin/smtp-server
+
+USER app
+
+EXPOSE 25
+EXPOSE 2525
+ENTRYPOINT ["/usr/local/bin/smtp-server"]

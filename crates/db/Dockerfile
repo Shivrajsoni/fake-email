@@ -3,7 +3,9 @@
 # Docker on Ubuntu Server uses these Linux images like any other host.
 FROM rust:1-bookworm AS builder
 
-RUN cargo install sqlx-cli --version 0.7.4 --no-default-features --features native-tls,postgres
+ENV CARGO_BUILD_JOBS=1
+RUN cargo install sqlx-cli --version 0.7.4 --no-default-features --features native-tls,postgres \
+    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
 FROM debian:bookworm-slim AS runtime
 

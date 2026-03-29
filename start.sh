@@ -32,7 +32,8 @@ export HTTP_PORT="${HTTP_PORT:-3001}"
 export SMTP_PORT="${SMTP_PORT:-2525}"
 
 echo "Building images..."
-docker compose build db-migrate http-server smtp-server
+# COMPOSE_PARALLEL_LIMIT=1: avoid two heavy Rust builds at once on small EC2 disks.
+COMPOSE_PARALLEL_LIMIT=1 docker compose build db-migrate http-server smtp-server
 
 echo "Starting postgres..."
 docker compose up -d postgres

@@ -2,6 +2,8 @@
 # - EC2 amd64: native build (no extra env).
 # - Apple Silicon dev: match production with: export DOCKER_DEFAULT_PLATFORM=linux/amd64
 #   before `docker compose build` (slower; uses emulation).
+# - Small disks: use BuildKit and limit parallelism, e.g.
+#     COMPOSE_PARALLEL_LIMIT=1 DOCKER_BUILDKIT=1 docker compose build
 name: fake-email
 
 services:
@@ -13,7 +15,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-fake_email}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fake_email_dev}
       POSTGRES_DB: ${POSTGRES_DB:-fake_email}
-    # Host port default 5433: avoids clash with a local Postgres on 5432.
     # Inside the compose network, services still use postgres:5432.
     ports:
       - "${POSTGRES_HOST_PORT:-5433}:5432"
@@ -42,7 +43,8 @@ services:
   http-server:
     build:
       context: .
-      dockerfile: crates/http-server/Dockerfile
+      dockerfile: Dockerfile.apps
+      target: runtime-http
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-fake_email}:${POSTGRES_PASSWORD:-fake_email_dev}@postgres:5432/${POSTGRES_DB:-fake_email}?sslmode=disable
@@ -57,7 +59,8 @@ services:
   smtp-server:
     build:
       context: .
-      dockerfile: crates/smtp-server/Dockerfile
+      dockerfile: Dockerfile.apps
+      target: runtime-smtp
     restart: unless-stopped
     # Non-root image can bind SMTP_PORT=25 on Linux (e.g. Ubuntu production).
     cap_add:
