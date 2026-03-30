@@ -28,7 +28,7 @@ const MAX_TTL_MINUTES: u64 = 1440; // 24 hours
 
 /// Handles the request to generate a new temporary email address.
 #[axum::debug_handler]
-pub async fn generate_email_handler(
+pub async fenerate_email_handler(
     State(app_state): State<AppState>,
     Json(payload): Json<TempEmailRequest>,
 ) -> Result<Json<TempEmailResponse>, ApiError> {

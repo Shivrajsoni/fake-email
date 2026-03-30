@@ -1,5 +1,3 @@
-"use client";
-
 import React from "react";
 
 // Matches the EmailDetail struct from the Rust backend

@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 interface AnimatedGradientBackgroundProps {
@@ -22,6 +20,12 @@ interface Beam {
   pulse: number;
   pulseSpeed: number;
 }
+
+const OPACITY_MAP: Record<"subtle" | "medium" | "strong", number> = {
+  subtle: 0.7,
+  medium: 0.85,
+  strong: 1,
+};
 
 function createBeam(width: number, height: number): Beam {
   const angle = -35 + Math.random() * 10;
@@ -48,12 +52,6 @@ export default function BeamsBackground({
   const animationFrameRef = useRef<number>(0);
   const MINIMUM_BEAMS = 20;
 
-  const opacityMap = {
-    subtle: 0.7,
-    medium: 0.85,
-    strong: 1,
-  };
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -71,7 +69,7 @@ export default function BeamsBackground({
 
       const totalBeams = MINIMUM_BEAMS * 1.5;
       beamsRef.current = Array.from({ length: totalBeams }, () =>
-        createBeam(canvas.width, canvas.height)
+        createBeam(canvas.width, canvas.height),
       );
     };
 
@@ -99,31 +97,29 @@ export default function BeamsBackground({
       ctx.translate(beam.x, beam.y);
       ctx.rotate((beam.angle * Math.PI) / 180);
 
-      // Calculate pulsing opacity
       const pulsingOpacity =
         beam.opacity *
         (0.8 + Math.sin(beam.pulse) * 0.2) *
-        opacityMap[intensity];
+        OPACITY_MAP[intensity];
 
       const gradient = ctx.createLinearGradient(0, 0, 0, beam.length);
 
-      // Enhanced gradient with multiple color stops
       gradient.addColorStop(0, `hsla(${beam.hue}, 85%, 65%, 0)`);
       gradient.addColorStop(
         0.1,
-        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity * 0.5})`
+        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity * 0.5})`,
       );
       gradient.addColorStop(
         0.4,
-        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity})`
+        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity})`,
       );
       gradient.addColorStop(
         0.6,
-        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity})`
+        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity})`,
       );
       gradient.addColorStop(
         0.9,
-        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity * 0.5})`
+        `hsla(${beam.hue}, 85%, 65%, ${pulsingOpacity * 0.5})`,
       );
       gradient.addColorStop(1, `hsla(${beam.hue}, 85%, 65%, 0)`);
 
@@ -143,7 +139,6 @@ export default function BeamsBackground({
         beam.y -= beam.speed;
         beam.pulse += beam.pulseSpeed;
 
-        // Reset beam when it goes off screen
         if (beam.y + beam.length < -100) {
           resetBeam(beam, index, totalBeams);
         }
@@ -168,7 +163,7 @@ export default function BeamsBackground({
     <div
       className={cn(
         "relative min-h-screen w-full overflow-hidden bg-neutral-950",
-        className
+        className,
       )}
     >
       <canvas

@@ -1,8 +1,9 @@
-"use client";
-import BeamsBackground from "@/@/components/xui/beams-background";
+import BeamsBackground from "@/components/xui/beams-background";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { errorMessage } from "@/lib/errors";
+import { generateMailbox } from "@/lib/backend";
 
 const placeholders = [
   "Generate Fake Email !",
@@ -13,8 +14,8 @@ const placeholders = [
   "today is your's day !",
 ];
 
-export default function Home() {
-  const router = useRouter();
+export function HomePage() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,31 +30,17 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username: username || null }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Something went wrong");
-      }
+      const data = await generateMailbox({ username: username || null });
 
       const newEmailAddress = data.address;
       if (newEmailAddress) {
-        // Store the address in session storage to use on the emails page
         sessionStorage.setItem("temp_address", newEmailAddress);
-        // Redirect to the page that will list the emails
-        router.push("/emails");
+        navigate("/emails");
       } else {
         throw new Error("Backend did not return a new email address.");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setIsLoading(false);
     }

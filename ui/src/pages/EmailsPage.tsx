@@ -1,44 +1,42 @@
-"use client";
-
 import { Cover } from "@/components/ui/cover";
 import { EmailView, EmailDetail } from "@/components/ui/email-view";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import { errorMessage } from "@/lib/errors";
+import {
+  deleteAllEmails,
+  deleteEmail,
+  fetchEmailDetail,
+  fetchEmailSummaries,
+} from "@/lib/backend";
 
-// This type matches the `EmailSummary` struct from your Rust backend.
 interface EmailSummary {
   id: string;
   from_address: string;
   subject: string;
-  received_at: string; // ISO 8601 date string
+  received_at: string;
   preview: string | null;
 }
 
-export default function EmailsPage() {
+export function EmailsPage() {
   const [emails, setEmails] = useState<EmailSummary[]>([]);
   const [tempAddress, setTempAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State for email view popup
   const [selectedEmail, setSelectedEmail] = useState<EmailDetail | null>(null);
   const [isViewing, setIsViewing] = useState(false);
   const [viewError, setViewError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // State for toast notifications and copy functionality
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  const router = useRouter();
-
-  // Function to show a toast and have it fade out
   const showToast = (
     message: string,
-    type: "success" | "error" = "success"
+    type: "success" | "error" = "success",
   ) => {
     setToast({ message, type });
     setTimeout(() => {
@@ -48,15 +46,10 @@ export default function EmailsPage() {
 
   const fetchEmails = useCallback(async (address: string) => {
     try {
-      const response = await fetch(`/api/emails?address=${address}`);
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to fetch emails.");
-      }
-      const data = await response.json();
-      setEmails(data);
-    } catch (err: any) {
-      setError(err.message);
+      const data = (await fetchEmailSummaries(address)) as EmailSummary[];
+      setEmails(Array.isArray(data) ? data : []);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -72,7 +65,7 @@ export default function EmailsPage() {
       return;
     }
 
-    fetchEmails(address); // Initial fetch
+    fetchEmails(address);
     const intervalId = setInterval(() => fetchEmails(address), 10000);
     return () => clearInterval(intervalId);
   }, [fetchEmails]);
@@ -84,17 +77,13 @@ export default function EmailsPage() {
     }
     setIsViewing(true);
     try {
-      const response = await fetch(
-        `/api/emails/${emailId}?address=${tempAddress}`
-      );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to fetch email details.");
-      }
-      const data: EmailDetail = await response.json();
+      const data = (await fetchEmailDetail(
+        tempAddress,
+        emailId,
+      )) as EmailDetail;
       setSelectedEmail(data);
-    } catch (err: any) {
-      setViewError(err.message);
+    } catch (err: unknown) {
+      setViewError(errorMessage(err));
     }
   };
 
@@ -111,19 +100,12 @@ export default function EmailsPage() {
     }
     setIsDeleting(true);
     try {
-      const response = await fetch(
-        `/api/emails/${emailId}?address=${tempAddress}`,
-        { method: "DELETE" }
-      );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to delete email.");
-      }
+      await deleteEmail(tempAddress, emailId);
       setEmails((prev) => prev.filter((e) => e.id !== emailId));
       handleCloseView();
       showToast("Email deleted successfully!");
-    } catch (err: any) {
-      setViewError(err.message);
+    } catch (err: unknown) {
+      setViewError(errorMessage(err));
     } finally {
       setIsDeleting(false);
     }
@@ -136,22 +118,15 @@ export default function EmailsPage() {
     }
     if (
       window.confirm(
-        "Are you sure you want to delete all emails in this inbox?"
+        "Are you sure you want to delete all emails in this inbox?",
       )
     ) {
       try {
-        const response = await fetch(`/api/emails/all?address=${tempAddress}`, {
-          method: "DELETE",
-        });
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || "Failed to delete all emails.");
-        }
-        const { deleted_count } = await response.json();
+        const { deleted_count } = await deleteAllEmails(tempAddress);
         setEmails([]);
-        showToast(`${deleted_count} emails have been deleted.`);
-      } catch (err: any) {
-        showToast(err.message, "error");
+        showToast(`${deleted_count ?? 0} emails have been deleted.`);
+      } catch (err: unknown) {
+        showToast(errorMessage(err), "error");
       }
     }
   };
@@ -220,6 +195,7 @@ export default function EmailsPage() {
           </h1>
           {emails.length > 0 && (
             <button
+              type="button"
               onClick={handleDeleteAllEmails}
               className="bg-red-600/80 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 rounded-md transition-colors"
             >
@@ -235,6 +211,11 @@ export default function EmailsPage() {
               </span>
               <div
                 onClick={handleCopyAddress}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") handleCopyAddress();
+                }}
+                role="button"
+                tabIndex={0}
                 className="flex-grow text-center sm:text-left cursor-pointer"
                 title="Copy to clipboard"
               >
@@ -264,6 +245,7 @@ export default function EmailsPage() {
                   <p className="text-zinc-400">Loading email...</p>
                 )}
                 <button
+                  type="button"
                   onClick={handleCloseView}
                   className="mt-4 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 rounded-md hover:bg-zinc-700"
                 >
