@@ -90,7 +90,6 @@ async fn main() {
     let addr = format!("{}:{}", http_host, http_port)
         .parse::<SocketAddr>()
         .expect("Invalid HTTP_HOST or HTTP_PORT");
-    //let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
     println!("HTTP Server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let server = axum::serve(listener, app);

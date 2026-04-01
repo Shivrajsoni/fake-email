@@ -1,8 +1,7 @@
-FROM rust:1.87-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 WORKDIR /app
 
-COPY cargo.toml ./Cargo.toml
-COPY Cargo.lock ./
+COPY Cargo.toml ./Cargo.toml
 COPY crates ./crates
 COPY migrations ./migrations
 
