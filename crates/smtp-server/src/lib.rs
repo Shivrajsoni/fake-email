@@ -1,6 +1,7 @@
 use mail_parser::MessageParser;
 use sqlx::PgPool;
 use std::env;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -61,8 +62,16 @@ pub enum SmtpServerError {
 /// The main entry point for the SMTP server.
 /// It binds to the port and enters a loop to accept new connections.
 pub async fn run_smtp_server(db_pool: Arc<PgPool>) -> Result<(), SmtpServerError> {
-    let listener = TcpListener::bind("127.0.0.1:2525").await?;
-    println!("Custom SMTP Server listening on 127.0.0.1:2525");
+    let smtp_host = env::var("SMTP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let smtp_port = env::var("SMTP_PORT")
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+        .unwrap_or(25);
+    let smtp_bind_addr = format!("{}:{}", smtp_host, smtp_port);
+
+    let listener = TcpListener::bind(&smtp_bind_addr).await?;
+    let local_addr: SocketAddr = listener.local_addr()?;
+    println!("Custom SMTP Server listening on {}", local_addr);
 
     loop {
         let (stream, _addr) = listener.accept().await?;

@@ -28,19 +28,18 @@ pub async fn create_temporary_email(
         let expires_at = created_at + Duration::minutes(ttl_minutes);
 
         // 3. Attempt to insert the new record into the database.
-        let record = sqlx::query_as!(
-            TempEmailAddress,
+        let record = sqlx::query_as::<_, TempEmailAddress>(
             r#"
             INSERT INTO temporary_emails (id, address, username, created_at, expires_at)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id, address, username, created_at, expires_at, is_active
             "#,
-            Uuid::new_v4(),
-            address,
-            username.clone(), // Pass a clone to avoid moving the original
-            created_at,
-            expires_at
         )
+        .bind(Uuid::new_v4())
+        .bind(address)
+        .bind(username.clone()) // Pass a clone to avoid moving the original
+        .bind(created_at)
+        .bind(expires_at)
         .fetch_one(pool)
         .await;
 
@@ -83,22 +82,21 @@ pub async fn save_received_email(
     pool: &PgPool,
     email: &NewReceivedEmail<'_>,
 ) -> Result<RecievedEmail, sqlx::Error> {
-    let record = sqlx::query_as!(
-        RecievedEmail,
+    let record = sqlx::query_as::<_, RecievedEmail>(
         r#"
         INSERT INTO received_emails (id, temp_email_id, from_address, subject, body_plain, body_html, headers, size_bytes)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, temp_email_id, from_address, subject, body_plain, body_html, headers, received_at, size_bytes
         "#,
-        Uuid::new_v4(),
-        email.temp_email_id,
-        email.from_address,
-        email.subject,
-        email.body_plain,
-        email.body_html,
-        email.headers,
-        email.size_bytes
     )
+    .bind(Uuid::new_v4())
+    .bind(email.temp_email_id)
+    .bind(email.from_address)
+    .bind(email.subject)
+    .bind(&email.body_plain)
+    .bind(&email.body_html)
+    .bind(&email.headers)
+    .bind(email.size_bytes)
     .fetch_one(pool)
     .await?;
 
@@ -112,8 +110,7 @@ pub async fn list_email_summaries_by_address(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<EmailSummary>, sqlx::Error> {
-    let records = sqlx::query_as!(
-        EmailSummary,
+    let records = sqlx::query_as::<_, EmailSummary>(
         r#"
         SELECT e.id,
                e.from_address,
@@ -125,11 +122,11 @@ pub async fn list_email_summaries_by_address(
         WHERE t.address = $1
         ORDER BY e.received_at DESC
         LIMIT $2 OFFSET $3
-        "#,
-        address,
-        limit,
-        offset
+        "#
     )
+    .bind(address)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
 
@@ -142,8 +139,7 @@ pub async fn get_email_detail_by_address(
     address: &str,
     email_id: Uuid,
 ) -> Result<Option<EmailDetail>, sqlx::Error> {
-    let record = sqlx::query_as!(
-        EmailDetail,
+    let record = sqlx::query_as::<_, EmailDetail>(
         r#"
         SELECT e.id,
                e.from_address,
@@ -154,10 +150,10 @@ pub async fn get_email_detail_by_address(
         FROM received_emails e
         JOIN temporary_emails t ON e.temp_email_id = t.id
         WHERE t.address = $1 AND e.id = $2
-        "#,
-        address,
-        email_id
+        "#
     )
+    .bind(address)
+    .bind(email_id)
     .fetch_optional(pool)
     .await?;
     Ok(record)
@@ -172,8 +168,7 @@ pub async fn delete_email_by_id_handler(
     email_id: Uuid,
 ) -> Result<Option<EmailDetail>, sqlx::Error> {
     // First, check if the email exists and belongs to the given temporary address
-    let record = sqlx::query_as!(
-        EmailDetail,
+    let record = sqlx::query_as::<_, EmailDetail>(
         r#"
         SELECT e.id,
                e.from_address,
@@ -184,10 +179,10 @@ pub async fn delete_email_by_id_handler(
         FROM received_emails e
         JOIN temporary_emails t ON e.temp_email_id = t.id
         WHERE t.address = $1 AND e.id = $2
-        "#,
-        address,
-        email_id
+        "#
     )
+    .bind(address)
+    .bind(email_id)
     .fetch_optional(pool)
     .await?;
 
@@ -197,13 +192,13 @@ pub async fn delete_email_by_id_handler(
     }
 
     // Now delete the email since we confirmed it exists and belongs to the temp address
-    let deleted_count = sqlx::query!(
+    let deleted_count = sqlx::query(
         r#"
         DELETE FROM received_emails 
         WHERE id = $1
-        "#,
-        email_id
+        "#
     )
+    .bind(email_id)
     .execute(pool)
     .await?
     .rows_affected();
@@ -223,20 +218,15 @@ pub async fn delete_all_emails_by_address(
     address: &str,
 ) -> Result<u64, sqlx::Error> {
     // Find the temp_email_id associated with the address
-    let temp_email = sqlx::query!(
-        "SELECT id FROM temporary_emails WHERE address = $1",
-        address
-    )
+    let temp_email = sqlx::query_scalar::<_, Uuid>("SELECT id FROM temporary_emails WHERE address = $1")
+    .bind(address)
     .fetch_optional(pool)
     .await?;
 
-    if let Some(record) = temp_email {
-        let temp_email_id = record.id;
+    if let Some(temp_email_id) = temp_email {
         // Delete all emails linked to this temp_email_id
-        let deleted_rows = sqlx::query!(
-            "DELETE FROM received_emails WHERE temp_email_id = $1",
-            temp_email_id
-        )
+        let deleted_rows = sqlx::query("DELETE FROM received_emails WHERE temp_email_id = $1")
+        .bind(temp_email_id)
         .execute(pool)
         .await?
         .rows_affected();

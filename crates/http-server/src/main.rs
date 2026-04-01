@@ -1,22 +1,27 @@
 use crate::core::{AppConfig, AppState};
 use axum::routing::delete;
-use axum::{Router, routing::get as get_route, routing::post};
+use axum::{http::HeaderValue, routing::get};
+use axum::{routing::get as get_route, routing::post, Router};
 use dotenv::dotenv;
 use sqlx::PgPool;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 
 // Declare the modules we created.
 mod api;
 mod core;
 
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
+
 #[tokio::main]
 async fn main() {
     // Load environment variables from a .env file.
     dotenv().ok();
+
+    let cors_layer = build_cors_layer();
 
     // --- Configuration ---
     let app_config = AppConfig {
@@ -28,6 +33,10 @@ async fn main() {
     let db_pool = PgPool::connect(&database_url)
         .await
         .expect("Failed to create database pool");
+    MIGRATOR
+        .run(&db_pool)
+        .await
+        .expect("Failed to run database migrations");
 
     // Wrap the pool in an Arc for shared ownership
     let db_pool_arc = Arc::new(db_pool);
@@ -68,11 +77,20 @@ async fn main() {
             "/api/email/:address/all",
             delete(api::email::delete_all_emails_handler),
         )
-        .layer(CorsLayer::permissive())
+        .route("/healthz", get(health_handler))
+        .layer(cors_layer)
         .with_state(app_state);
 
     // --- Start HTTP Server ---
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
+    let http_host = env::var("HTTP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let http_port = env::var("HTTP_PORT")
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+        .unwrap_or(3001);
+    let addr = format!("{}:{}", http_host, http_port)
+        .parse::<SocketAddr>()
+        .expect("Invalid HTTP_HOST or HTTP_PORT");
+    //let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
     println!("HTTP Server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let server = axum::serve(listener, app);
@@ -93,4 +111,27 @@ async fn main() {
     });
 
     server.await.unwrap();
+}
+
+fn build_cors_layer() -> CorsLayer {
+    let allowed_origins = env::var("CORS_ALLOWED_ORIGINS").unwrap_or_default();
+
+    if allowed_origins.trim().is_empty() || allowed_origins.trim() == "*" {
+        return CorsLayer::new().allow_origin(Any);
+    }
+
+    let origins: Vec<HeaderValue> = allowed_origins
+        .split(',')
+        .filter_map(|value| value.trim().parse::<HeaderValue>().ok())
+        .collect();
+
+    if origins.is_empty() {
+        return CorsLayer::new().allow_origin(Any);
+    }
+
+    CorsLayer::new().allow_origin(origins)
+}
+
+async fn health_handler() -> &'static str {
+    "ok"
 }

@@ -1,0 +1,9 @@
+target
+.git
+.gitignore
+**/.DS_Store
+**/node_modules
+ui/dist
+ui/.vite
+ui/.next
+*.log
