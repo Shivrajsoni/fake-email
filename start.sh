@@ -40,8 +40,8 @@ check_prerequisites() {
         die "Compose file '$COMPOSE_FILE' not found. Run this script from the project root."
     fi
 
-    if [ ! -f "deploy/nginx.api.conf" ]; then
-        die "Nginx config 'deploy/nginx.api.conf' not found. Run this script from the project root."
+    if [ ! -f "deploy/nginx.conf" ]; then
+        die "Nginx config 'deploy/nginx.conf' not found. Run this script from the project root."
     fi
 }
 

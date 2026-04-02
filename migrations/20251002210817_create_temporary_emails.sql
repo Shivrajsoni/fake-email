@@ -11,4 +11,4 @@ CREATE TABLE temporary_emails (
 );
 
 CREATE INDEX idx_temp_emails_address ON temporary_emails(address);
-CREATE INDEX idx_temp_emails_expires ON temporary_emails(expires_at) WHERE is_active = TRUE;
+CREATE INDEX idx_temp_emails_expires ON temporary_emails(expires_at) WHERE is_active = TRUE; -- Add migration script here

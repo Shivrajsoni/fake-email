@@ -16,6 +16,24 @@ Production-ready crates deployment with:
    - API via Nginx: `http://localhost/healthz`
   - SMTP: host `localhost`, port `587`
 
+## HTTPS (SSL) with Let's Encrypt
+
+Prereqs:
+- Your domain A record points to the server public IP
+- Inbound ports open: 80 and 443
+
+Issue certificate + enable HTTPS:
+
+```bash
+DOMAIN=your-domain.com EMAIL=you@your-domain.com ./deploy/ssl-setup.sh
+```
+
+Renew certificates (run weekly via cron):
+
+```bash
+./deploy/ssl-renew.sh
+```
+
 ## Important production notes
 
 - Port `587` is the modern SMTP submission port and is often allowed where `25` is blocked.
