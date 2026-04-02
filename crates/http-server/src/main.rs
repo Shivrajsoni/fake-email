@@ -1,7 +1,7 @@
 use crate::core::{AppConfig, AppState};
-use axum::routing::delete;
-use axum::{http::HeaderValue, routing::get};
-use axum::{routing::get as get_route, routing::post, Router};
+use axum::http::HeaderValue;
+use axum::routing::{delete, get, post};
+use axum::Router;
 use dotenv::dotenv;
 use sqlx::PgPool;
 use std::env;
@@ -10,7 +10,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::{Any, CorsLayer};
 
-// Declare the modules we created.
 mod api;
 mod core;
 
@@ -18,17 +17,14 @@ static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
 
 #[tokio::main]
 async fn main() {
-    // Load environment variables from a .env file.
     dotenv().ok();
 
     let cors_layer = build_cors_layer();
 
-    // --- Configuration ---
     let app_config = AppConfig {
         domain: env::var("DOMAIN").unwrap_or_else(|_| "localhost".to_string()),
     };
 
-    // --- Database Pool ---
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_pool = PgPool::connect(&database_url)
         .await
@@ -38,24 +34,34 @@ async fn main() {
         .await
         .expect("Failed to run database migrations");
 
-    // Wrap the pool in an Arc for shared ownership
-    let db_pool_arc = Arc::new(db_pool);
+    let db_pool = Arc::new(db_pool);
 
-    // --- Shared Application State (for Axum) ---
     let app_state = AppState {
-        db_pool: Arc::clone(&db_pool_arc), // Clone the Arc for the HTTP server
+        db_pool: Arc::clone(&db_pool),
         config: app_config,
     };
 
-    // --- Start SMTP Server ---
-    let smtp_db_pool = Arc::clone(&db_pool_arc);
+    let smtp_pool = Arc::clone(&db_pool);
     tokio::spawn(async move {
-        if let Err(e) = smtp_server::run_smtp_server(smtp_db_pool).await {
-            eprintln!("SMTP server failed: {:?}", e);
+        let mut restart_delay = Duration::from_secs(1);
+        const MAX_DELAY: Duration = Duration::from_secs(30);
+
+        loop {
+            eprintln!("SMTP server starting...");
+            match smtp_server::run_smtp_server(Arc::clone(&smtp_pool)).await {
+                Ok(()) => break,
+                Err(e) => {
+                    eprintln!(
+                        "SMTP server crashed: {:?} — restarting in {:?}",
+                        e, restart_delay
+                    );
+                    tokio::time::sleep(restart_delay).await;
+                    restart_delay = (restart_delay * 2).min(MAX_DELAY);
+                }
+            }
         }
     });
 
-    // --- Axum Router ---
     let app = Router::new()
         .route(
             "/api/email/generate",
@@ -63,15 +69,15 @@ async fn main() {
         )
         .route(
             "/api/email/:address/summaries",
-            get_route(api::email::list_email_summaries_handler),
+            get(api::email::list_email_summaries_handler),
         )
         .route(
             "/api/email/:address/:email_id",
-            get_route(api::email::get_email_detail_handler),
+            get(api::email::get_email_detail_handler),
         )
         .route(
             "/api/email/:address/:email_id",
-            delete(api::email::delete_email_by_id),
+            delete(api::email::delete_email_by_id_handler),
         )
         .route(
             "/api/email/:address/all",
@@ -81,7 +87,6 @@ async fn main() {
         .layer(cors_layer)
         .with_state(app_state);
 
-    // --- Start HTTP Server ---
     let http_host = env::var("HTTP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let http_port = env::var("HTTP_PORT")
         .ok()
@@ -94,8 +99,7 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let server = axum::serve(listener, app);
 
-    // Background cleanup task
-    let cleanup_pool = Arc::clone(&db_pool_arc);
+    let cleanup_pool = Arc::clone(&db_pool);
     tokio::spawn(async move {
         loop {
             if let Ok(deleted) =

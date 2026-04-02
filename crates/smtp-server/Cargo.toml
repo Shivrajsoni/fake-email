@@ -6,12 +6,11 @@ edition = "2021"
 [dependencies]
 tokio = { workspace = true, features = ["full"] }
 sqlx = { workspace = true }
-chrono = {workspace = true}
 thiserror = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 mail-parser = { workspace = true }
-uuid = { workspace = true }
-
 db = { path = "../db" }
 
+[dev-dependencies]
+chrono = { workspace = true }
+uuid = { workspace = true }

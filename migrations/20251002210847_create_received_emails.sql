@@ -14,4 +14,4 @@ CREATE TABLE received_emails (
 );
 
 CREATE INDEX idx_received_emails_temp_id ON received_emails(temp_email_id, received_at DESC);
-CREATE INDEX idx_received_emails_received ON received_emails(received_at); -- Add migration script here
+CREATE INDEX idx_received_emails_received ON received_emails(received_at);

@@ -13,7 +13,6 @@ pub struct TempEmailAddress {
     pub is_active: Option<bool>,
 }
 
-// DTO  For API Response
 #[derive(Serialize)]
 pub struct TempEmailResponse {
     pub address: String,
@@ -21,7 +20,6 @@ pub struct TempEmailResponse {
     pub expiry_in_sec: u64,
 }
 
-// DTO for API Request
 #[derive(Deserialize)]
 pub struct TempEmailRequest {
     pub username: Option<String>,

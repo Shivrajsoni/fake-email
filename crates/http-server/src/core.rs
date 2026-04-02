@@ -1,27 +1,22 @@
-use axum::{
-    Json,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use db::services::error::ServiceError;
 use serde_json::json;
 use std::sync::Arc;
 use thiserror::Error;
 
-// Define a struct to hold our application's shared state.
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: Arc<sqlx::PgPool>,
-    pub config: AppConfig, // Assuming a config struct
+    pub config: AppConfig,
 }
 
-// A placeholder for your application's configuration.
 #[derive(Clone)]
 pub struct AppConfig {
     pub domain: String,
 }
 
-// Define a custom error type for our API.
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("Invalid input: {0}")]
@@ -34,7 +29,6 @@ pub enum ApiError {
     Database(#[from] ServiceError),
 }
 
-// Implement `IntoResponse` for `ApiError` to convert it into an HTTP response.
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {

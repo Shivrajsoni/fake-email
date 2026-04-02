@@ -5,11 +5,10 @@ edition = "2021"
 
 [dependencies]
 chrono = { workspace = true }
-rand = {workspace = true}
+rand = { workspace = true }
 sqlx = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
 uuid = { workspace = true, features = ["v4", "serde"] }
 thiserror = { workspace = true }
 

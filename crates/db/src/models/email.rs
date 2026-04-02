@@ -16,7 +16,7 @@ pub struct NewReceivedEmail<'a> {
 }
 
 #[derive(FromRow)]
-pub struct RecievedEmail {
+pub struct ReceivedEmail {
     pub id: Uuid,
     pub temp_email_id: Uuid,
     pub from_address: String,

@@ -1,88 +1,13 @@
-use crate::models::email::{EmailDetail, EmailSummary, NewReceivedEmail, RecievedEmail};
-use crate::models::temp_address::TempEmailAddress;
-use crate::services::error::ServiceError;
-use crate::services::generator::generate_email_address;
-use chrono::{Duration, Utc};
+use crate::models::email::{EmailDetail, EmailSummary, NewReceivedEmail, ReceivedEmail};
 use sqlx::PgPool;
 use uuid::Uuid;
-
-const MAX_RETRIES: usize = 3;
-const UNIQUE_VIOLATION_CODE: &str = "23505";
-
-/// Creates a temporary email address and inserts it into the database.
-/// This function orchestrates the generation of a new email address and its
-/// insertion into the database. It uses an optimistic retry mechanism.
-/// It will try to generate and insert an address up to `MAX_RETRIES` times.
-pub async fn create_temporary_email(
-    pool: &PgPool,
-    username: Option<String>,
-    ttl_minutes: i64,
-    domain: &str,
-) -> Result<TempEmailAddress, ServiceError> {
-    for _ in 0..MAX_RETRIES {
-        // 1. Generate a new address IN EVERY LOOP ITERATION.
-        let address = generate_email_address(username.clone(), domain);
-
-        // 2. Get fresh timestamps for every attempt, using NaiveDateTime.
-        let created_at = Utc::now();
-        let expires_at = created_at + Duration::minutes(ttl_minutes);
-
-        // 3. Attempt to insert the new record into the database.
-        let record = sqlx::query_as::<_, TempEmailAddress>(
-            r#"
-            INSERT INTO temporary_emails (id, address, username, created_at, expires_at)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, address, username, created_at, expires_at, is_active
-            "#,
-        )
-        .bind(Uuid::new_v4())
-        .bind(address)
-        .bind(username.clone()) // Pass a clone to avoid moving the original
-        .bind(created_at)
-        .bind(expires_at)
-        .fetch_one(pool)
-        .await;
-
-        match record {
-            Ok(new_record) => {
-                // 3. Success! The insert worked, so we can return the new record.
-                return Ok(new_record);
-            }
-            Err(e) => {
-                // 4. An error occurred. We need to check if it's a unique violation.
-                if is_unique_violation(&e) {
-                    // It's a collision. The loop will `continue` and we'll try again.
-                    continue;
-                } else {
-                    // It's some other database error. We should stop and return the error.
-                    return Err(ServiceError::DatabaseError(e));
-                }
-            }
-        }
-    }
-
-    // 5. If the loop finishes, we have failed after all retries.
-    Err(ServiceError::FailedToFindUniqueName(MAX_RETRIES))
-}
-
-/// Checks if an sqlx::Error is a unique constraint violation for PostgreSQL.
-fn is_unique_violation(e: &sqlx::Error) -> bool {
-    if let sqlx::Error::Database(db_err) = e {
-        // By using `db_err.code()`, we can check the error code without
-        // needing to downcast to a specific database error type like `PgError`.
-        if let Some(code) = db_err.code() {
-            return code == UNIQUE_VIOLATION_CODE;
-        }
-    }
-    false
-}
 
 /// Saves a new received email to the database.
 pub async fn save_received_email(
     pool: &PgPool,
     email: &NewReceivedEmail<'_>,
-) -> Result<RecievedEmail, sqlx::Error> {
-    let record = sqlx::query_as::<_, RecievedEmail>(
+) -> Result<ReceivedEmail, sqlx::Error> {
+    let record = sqlx::query_as::<_, ReceivedEmail>(
         r#"
         INSERT INTO received_emails (id, temp_email_id, from_address, subject, body_plain, body_html, headers, size_bytes)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -160,14 +85,12 @@ pub async fn get_email_detail_by_address(
 }
 
 /// Deletes an email by ID, ensuring it belongs to the given temporary address.
-/// First checks if the email exists and belongs to the temp address, then deletes it.
-/// Returns the deleted email details if successful, None if email doesn't exist or doesn't belong to the address.
-pub async fn delete_email_by_id_handler(
+/// Returns the deleted email details, or None if the email was not found.
+pub async fn delete_email_by_id(
     pool: &PgPool,
     address: &str,
     email_id: Uuid,
 ) -> Result<Option<EmailDetail>, sqlx::Error> {
-    // First, check if the email exists and belongs to the given temporary address
     let record = sqlx::query_as::<_, EmailDetail>(
         r#"
         SELECT e.id,
@@ -186,24 +109,16 @@ pub async fn delete_email_by_id_handler(
     .fetch_optional(pool)
     .await?;
 
-    // If the email doesn't exist or doesn't belong to this temp address, return None
     if record.is_none() {
         return Ok(None);
     }
 
-    // Now delete the email since we confirmed it exists and belongs to the temp address
-    let deleted_count = sqlx::query(
-        r#"
-        DELETE FROM received_emails 
-        WHERE id = $1
-        "#
-    )
-    .bind(email_id)
-    .execute(pool)
-    .await?
-    .rows_affected();
+    let deleted_count = sqlx::query("DELETE FROM received_emails WHERE id = $1")
+        .bind(email_id)
+        .execute(pool)
+        .await?
+        .rows_affected();
 
-    // Return the email details if deletion was successful
     if deleted_count > 0 {
         Ok(record)
     } else {
@@ -212,27 +127,26 @@ pub async fn delete_email_by_id_handler(
 }
 
 /// Deletes all emails associated with a given temporary email address.
-/// Returns the number of deleted emails.
 pub async fn delete_all_emails_by_address(
     pool: &PgPool,
     address: &str,
 ) -> Result<u64, sqlx::Error> {
-    // Find the temp_email_id associated with the address
-    let temp_email = sqlx::query_scalar::<_, Uuid>("SELECT id FROM temporary_emails WHERE address = $1")
+    let temp_email_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM temporary_emails WHERE address = $1",
+    )
     .bind(address)
     .fetch_optional(pool)
     .await?;
 
-    if let Some(temp_email_id) = temp_email {
-        // Delete all emails linked to this temp_email_id
-        let deleted_rows = sqlx::query("DELETE FROM received_emails WHERE temp_email_id = $1")
-        .bind(temp_email_id)
-        .execute(pool)
-        .await?
-        .rows_affected();
-        Ok(deleted_rows)
-    } else {
-        // If the temp address doesn't exist, no emails can be deleted.
-        Ok(0)
+    match temp_email_id {
+        Some(id) => {
+            let deleted = sqlx::query("DELETE FROM received_emails WHERE temp_email_id = $1")
+                .bind(id)
+                .execute(pool)
+                .await?
+                .rows_affected();
+            Ok(deleted)
+        }
+        None => Ok(0),
     }
 }
