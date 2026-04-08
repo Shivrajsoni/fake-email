@@ -4,15 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+db = { path = "../db" }
 axum = { workspace = true, features = ["macros"] }
 chrono = { workspace = true, features = ["serde"] }
-db = { path = "../db" }
-dotenv = { workspace = true }
-sqlx = { workspace = true, features = ["runtime-tokio-native-tls", "postgres"] }
+dotenvy = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-smtp-server = { path = "../smtp-server" }
-thiserror = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio-native-tls", "postgres"] }
 tokio = { workspace = true, features = ["full"] }
 tower-http = { workspace = true, features = ["cors"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 uuid = { workspace = true }

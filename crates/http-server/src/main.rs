@@ -1,140 +1,80 @@
-use crate::core::{AppConfig, AppState};
-use axum::http::HeaderValue;
-use axum::routing::{delete, get, post};
-use axum::Router;
-use dotenv::dotenv;
-use sqlx::PgPool;
-use std::env;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
-use tower_http::cors::{Any, CorsLayer};
-
+mod address;
 mod api;
-mod core;
 
-static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
+    Router,
+};
+use db::{connect_pool, run_migrations};
+use sqlx::postgres::PgPool;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub pool: Arc<RwLock<Option<PgPool>>>,
+    pub mail_domain: Arc<str>,
+}
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
+    tracing_subscriber::fmt::init();
+    dotenvy::dotenv().ok();
 
-    let cors_layer = build_cors_layer();
+    let pool_slot: Arc<RwLock<Option<PgPool>>> = Arc::new(RwLock::new(None));
+    let pool_slot_bg = Arc::clone(&pool_slot);
 
-    let app_config = AppConfig {
-        domain: env::var("DOMAIN").unwrap_or_else(|_| "localhost".to_string()),
-    };
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let db_pool = PgPool::connect(&database_url)
-        .await
-        .expect("Failed to create database pool");
-    MIGRATOR
-        .run(&db_pool)
-        .await
-        .expect("Failed to run database migrations");
-
-    let db_pool = Arc::new(db_pool);
-
-    let app_state = AppState {
-        db_pool: Arc::clone(&db_pool),
-        config: app_config,
-    };
-
-    let smtp_pool = Arc::clone(&db_pool);
     tokio::spawn(async move {
-        let mut restart_delay = Duration::from_secs(1);
-        const MAX_DELAY: Duration = Duration::from_secs(30);
-
-        loop {
-            eprintln!("SMTP server starting...");
-            match smtp_server::run_smtp_server(Arc::clone(&smtp_pool)).await {
-                Ok(()) => break,
-                Err(e) => {
-                    eprintln!(
-                        "SMTP server crashed: {:?} — restarting in {:?}",
-                        e, restart_delay
-                    );
-                    tokio::time::sleep(restart_delay).await;
-                    restart_delay = (restart_delay * 2).min(MAX_DELAY);
-                }
+        let pool = match connect_pool().await {
+            Ok(p) => {
+                tracing::info!("database pool connected");
+                p
             }
+            Err(e) => {
+                tracing::error!(error = %e, "database connection failed");
+                return;
+            }
+        };
+        match run_migrations(&pool).await {
+            Ok(()) => {
+                tracing::info!("database migrations applied");
+                *pool_slot_bg.write().await = Some(pool);
+            }
+            Err(e) => tracing::error!(error = %e, "database migration failed"),
         }
     });
+
+    let mail_domain: Arc<str> = std::env::var("MAIL_DOMAIN")
+        .or_else(|_| std::env::var("DOMAIN"))
+        .expect("MAIL_DOMAIN or DOMAIN must be set for address generation")
+        .into_boxed_str()
+        .into();
+
+    let state = AppState {
+        pool: pool_slot,
+        mail_domain,
+    };
 
     let app = Router::new()
+        .route("/api/health", get(health_check))
         .route(
-            "/api/email/generate",
-            post(api::email::generate_email_handler),
+            "/api/temporary-address",
+            post(api::create_temporary_address),
         )
-        .route(
-            "/api/email/:address/summaries",
-            get(api::email::list_email_summaries_handler),
-        )
-        .route(
-            "/api/email/:address/:email_id",
-            get(api::email::get_email_detail_handler),
-        )
-        .route(
-            "/api/email/:address/:email_id",
-            delete(api::email::delete_email_by_id_handler),
-        )
-        .route(
-            "/api/email/:address/all",
-            delete(api::email::delete_all_emails_handler),
-        )
-        .route("/healthz", get(health_handler))
-        .layer(cors_layer)
-        .with_state(app_state);
+        .route("/api/inbox/poll", get(api::poll_inbox_by_address))
+        .with_state(state);
 
-    let http_host = env::var("HTTP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let http_port = env::var("HTTP_PORT")
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-        .unwrap_or(3001);
-    let addr = format!("{}:{}", http_host, http_port)
-        .parse::<SocketAddr>()
-        .expect("Invalid HTTP_HOST or HTTP_PORT");
-    println!("HTTP Server listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    let server = axum::serve(listener, app);
-
-    let cleanup_pool = Arc::clone(&db_pool);
-    tokio::spawn(async move {
-        loop {
-            if let Ok(deleted) =
-                db::services::temp_address::delete_expired_temp_addresses(&cleanup_pool).await
-            {
-                if deleted > 0 {
-                    println!("Cleanup: deleted {} expired temp addresses", deleted);
-                }
-            }
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        }
-    });
-
-    server.await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
-fn build_cors_layer() -> CorsLayer {
-    let allowed_origins = env::var("CORS_ALLOWED_ORIGINS").unwrap_or_default();
-
-    if allowed_origins.trim().is_empty() || allowed_origins.trim() == "*" {
-        return CorsLayer::new().allow_origin(Any);
+async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
+    let guard = state.pool.read().await;
+    match guard.as_ref() {
+        Some(_) => (StatusCode::OK, "OK"),
+        None => (StatusCode::SERVICE_UNAVAILABLE, "database not ready"),
     }
-
-    let origins: Vec<HeaderValue> = allowed_origins
-        .split(',')
-        .filter_map(|value| value.trim().parse::<HeaderValue>().ok())
-        .collect();
-
-    if origins.is_empty() {
-        return CorsLayer::new().allow_origin(Any);
-    }
-
-    CorsLayer::new().allow_origin(origins)
-}
-
-async fn health_handler() -> &'static str {
-    "ok"
 }
