@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useId, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRef } from "react";

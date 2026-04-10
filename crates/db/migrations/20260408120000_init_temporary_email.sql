@@ -15,3 +15,5 @@ CREATE TABLE received_email (
 );
 
 CREATE INDEX idx_received_email_temporary_email_id ON received_email (temporary_email_id);
+
+CREATE INDEX IF NOT EXISTS idx_temporary_email_created_at ON temporary_email (created_at);

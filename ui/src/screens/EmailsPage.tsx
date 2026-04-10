@@ -1,53 +1,43 @@
-import { Cover } from "@/components/ui/cover";
-import { EmailView, EmailDetail } from "@/components/ui/email-view";
-import { useEffect, useState, useCallback } from "react";
-import { errorMessage } from "@/lib/errors";
-import {
-  deleteAllEmails,
-  deleteEmail,
-  fetchEmailDetail,
-  fetchEmailSummaries,
-} from "@/lib/backend";
+"use client";
 
-interface EmailSummary {
-  id: string;
-  from_address: string;
-  subject: string;
-  received_at: string;
-  preview: string | null;
-}
+import { Cover } from "@/components/ui/cover";
+import { EmailView } from "@/components/ui/email-view";
+import Link from "next/link";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { errorMessage } from "@/lib/errors";
+import { pollInbox, type ReceivedEmail } from "@/lib/backend";
+
+const POLL_INTERVAL_MS = 10_000;
 
 export function EmailsPage() {
-  const [emails, setEmails] = useState<EmailSummary[]>([]);
+  const [emails, setEmails] = useState<ReceivedEmail[]>([]);
   const [tempAddress, setTempAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [selectedEmail, setSelectedEmail] = useState<EmailDetail | null>(null);
+  const nextSinceRef = useRef<string | null>(null);
+  const [selectedEmail, setSelectedEmail] = useState<ReceivedEmail | null>(null);
   const [isViewing, setIsViewing] = useState(false);
-  const [viewError, setViewError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  const showToast = (
-    message: string,
-    type: "success" | "error" = "success",
-  ) => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3000);
-  };
-
-  const fetchEmails = useCallback(async (address: string) => {
+  const fetchEmails = useCallback(async (address: string, since: string | null) => {
     try {
-      const data = (await fetchEmailSummaries(address)) as EmailSummary[];
-      setEmails(Array.isArray(data) ? data : []);
+      const data = await pollInbox(address, since);
+      setEmails((prev) => {
+        if (since == null) {
+          return data.messages;
+        }
+        const seen = new Set(prev.map((m) => m.id));
+        const merged = [...prev];
+        for (const message of data.messages) {
+          if (!seen.has(message.id)) {
+            merged.unshift(message);
+          }
+        }
+        return merged;
+      });
+      nextSinceRef.current = data.next_since;
+      setError(null);
     } catch (err: unknown) {
       setError(errorMessage(err));
     } finally {
@@ -65,70 +55,35 @@ export function EmailsPage() {
       return;
     }
 
-    fetchEmails(address);
-    const intervalId = setInterval(() => fetchEmails(address), 10000);
-    return () => clearInterval(intervalId);
+    void fetchEmails(address, null);
+    const intervalId = setInterval(() => {
+      if (document.hidden) {
+        return;
+      }
+      void fetchEmails(address, nextSinceRef.current);
+    }, POLL_INTERVAL_MS);
+
+    const onVisibility = () => {
+      if (!document.hidden) {
+        void fetchEmails(address, nextSinceRef.current);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchEmails]);
 
-  const handleEmailClick = async (emailId: string) => {
-    if (!tempAddress) {
-      setViewError("Temporary address is missing.");
-      return;
-    }
+  const handleEmailClick = (email: ReceivedEmail) => {
     setIsViewing(true);
-    try {
-      const data = (await fetchEmailDetail(
-        tempAddress,
-        emailId,
-      )) as EmailDetail;
-      setSelectedEmail(data);
-    } catch (err: unknown) {
-      setViewError(errorMessage(err));
-    }
+    setSelectedEmail(email);
   };
 
   const handleCloseView = () => {
     setIsViewing(false);
     setSelectedEmail(null);
-    setViewError(null);
-  };
-
-  const handleDeleteEmail = async (emailId: string) => {
-    if (!tempAddress) {
-      setViewError("Cannot delete: Temporary address is missing.");
-      return;
-    }
-    setIsDeleting(true);
-    try {
-      await deleteEmail(tempAddress, emailId);
-      setEmails((prev) => prev.filter((e) => e.id !== emailId));
-      handleCloseView();
-      showToast("Email deleted successfully!");
-    } catch (err: unknown) {
-      setViewError(errorMessage(err));
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteAllEmails = async () => {
-    if (!tempAddress) {
-      showToast("Cannot delete: Temporary address is missing.", "error");
-      return;
-    }
-    if (
-      window.confirm(
-        "Are you sure you want to delete all emails in this inbox?",
-      )
-    ) {
-      try {
-        const { deleted_count } = await deleteAllEmails(tempAddress);
-        setEmails([]);
-        showToast(`${deleted_count ?? 0} emails have been deleted.`);
-      } catch (err: unknown) {
-        showToast(errorMessage(err), "error");
-      }
-    }
   };
 
   const handleCopyAddress = () => {
@@ -144,7 +99,17 @@ export function EmailsPage() {
       return <p className="text-zinc-400">Loading your inbox...</p>;
     }
     if (error) {
-      return <p className="text-red-500">{error}</p>;
+      return (
+        <div className="space-y-4">
+          <p className="text-red-500">{error}</p>
+          <Link
+            href="/"
+            className="inline-flex text-sm font-medium text-zinc-300 underline underline-offset-4 hover:text-white"
+          >
+            Back to home to generate an address
+          </Link>
+        </div>
+      );
     }
     if (emails.length === 0) {
       return (
@@ -161,12 +126,12 @@ export function EmailsPage() {
         {emails.map((email) => (
           <li
             key={email.id}
-            onClick={() => handleEmailClick(email.id)}
+            onClick={() => handleEmailClick(email)}
             className="border border-zinc-800 rounded-lg p-4 hover:bg-zinc-800/50 transition-colors cursor-pointer"
           >
             <div className="flex justify-between items-baseline">
               <p className="font-semibold text-zinc-200">
-                {email.from_address}
+                {email.from_addr}
               </p>
               <p className="text-xs text-zinc-500">
                 {new Date(email.received_at).toLocaleString()}
@@ -175,9 +140,9 @@ export function EmailsPage() {
             <p className="text-zinc-300 mt-2 truncate font-medium">
               {email.subject}
             </p>
-            {email.preview && (
+            {email.body_text && (
               <p className="text-sm text-zinc-500 mt-1 truncate">
-                {email.preview}
+                {email.body_text}
               </p>
             )}
           </li>
@@ -193,15 +158,6 @@ export function EmailsPage() {
           <h1 className="text-3xl md:text-4xl font-bold text-zinc-100">
             Your Temporary Inbox
           </h1>
-          {emails.length > 0 && (
-            <button
-              type="button"
-              onClick={handleDeleteAllEmails}
-              className="bg-red-600/80 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 rounded-md transition-colors"
-            >
-              Delete All
-            </button>
-          )}
         </div>
         <div className="mb-8 space-y-4">
           {tempAddress && (
@@ -230,20 +186,11 @@ export function EmailsPage() {
       {isViewing && (
         <>
           {selectedEmail ? (
-            <EmailView
-              email={selectedEmail}
-              onClose={handleCloseView}
-              onDelete={handleDeleteEmail}
-              isDeleting={isDeleting}
-            />
+            <EmailView email={selectedEmail} onClose={handleCloseView} />
           ) : (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8">
-                {viewError ? (
-                  <p className="text-red-500">{viewError}</p>
-                ) : (
-                  <p className="text-zinc-400">Loading email...</p>
-                )}
+                <p className="text-zinc-400">Loading email...</p>
                 <button
                   type="button"
                   onClick={handleCloseView}
@@ -255,16 +202,6 @@ export function EmailsPage() {
             </div>
           )}
         </>
-      )}
-
-      {toast && (
-        <div
-          className={`fixed bottom-5 right-5 p-4 rounded-lg text-white ${
-            toast.type === "success" ? "bg-green-600" : "bg-red-600"
-          }`}
-        >
-          {toast.message}
-        </div>
       )}
     </main>
   );

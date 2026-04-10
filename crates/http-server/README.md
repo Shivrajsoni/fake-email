@@ -29,16 +29,16 @@ Mail domain for generated addresses comes from **`MAIL_DOMAIN`**, with a fallbac
 
 Collisions on `temp_email_addr` are possible in theory; the handler **retries** with a new random suffix a limited number of times before returning an error.
 
-### Inbox polling (no push from this route)
+### Inbox polling
 
-The frontend is expected to **poll** on a timer. `GET /api/inbox/poll` takes:
+The frontend typically **polls on a timer** (for example every 10–30 seconds). `GET /api/inbox/poll` takes:
 
 | Query     | Meaning                                                                                                                                                                                                                          |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `address` | Full temporary address (must contain `@`).                                                                                                                                                                                       |
 | `since`   | Optional RFC 3339 timestamp. When set, only messages with `received_at` strictly **after** `since` are returned (incremental poll). When omitted, all stored messages for that address are returned (useful for the first load). |
 
-The JSON response includes structured message rows, a `has_new` / `new_mail_count` summary, and `next_since` (the latest `received_at` in the batch) so the client can pass it back as `since` on the next poll and avoid re-fetching the same rows.
+The JSON response includes `messages`, `new_mail_count`, and `next_since`. The cursor is the latest `received_at` among returned rows; **if the batch is empty and the client sent `since`, `next_since` echoes that same `since`** so incremental polling does not reset.
 
 ## API summary
 

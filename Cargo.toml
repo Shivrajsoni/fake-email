@@ -2,7 +2,7 @@
 members = [
   "crates/db",
   "crates/http-server",
-  "crates/smtp-server",
+  "crates/smtp",
 ]
 resolver = "2"
 

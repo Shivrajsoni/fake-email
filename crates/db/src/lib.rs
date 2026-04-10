@@ -3,7 +3,7 @@ mod repo;
 
 pub use models::{ReceivedEmail, TemporaryEmail};
 pub use repo::{
-    find_temporary_email_by_addr, find_temporary_email_by_id, insert_temporary_email,
+    find_temporary_email_by_addr, insert_received_email, insert_temporary_email,
     list_received_emails,
 };
 

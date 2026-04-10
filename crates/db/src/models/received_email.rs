@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ReceivedEmail {
     pub id: Uuid,
+    #[serde(skip_serializing)]
     pub temporary_email_id: Uuid,
     pub from_addr: Option<String>,
     pub to_addr: Option<String>,

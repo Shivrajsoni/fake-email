@@ -12,18 +12,38 @@ const GenerateEmailRequestSchema = z.object({
     .nullable(),
 });
 
+/**
+ * Base URL for API calls from the browser.
+ * - Empty string: same-origin `/api/*` (Next.js rewrites to http-server — no CORS).
+ * - Set `NEXT_PUBLIC_API_URL` only when the UI and API are on different hosts and the API sends CORS headers.
+ */
 export function getBackendBaseUrl(): string {
-  const raw = import.meta.env.VITE_API_URL;
+  const raw = process.env.NEXT_PUBLIC_API_URL;
   if (raw == null || raw === "") {
-    console.warn(
-      "VITE_API_URL is unset; defaulting to http://127.0.0.1:3001. Set it in .env for production.",
-    );
-    return "http://127.0.0.1:3001";
+    return "";
   }
   return String(raw).replace(/\/$/, "");
 }
 
-export async function generateMailbox(body: unknown): Promise<{ address?: string }> {
+export interface ReceivedEmail {
+  id: string;
+  from_addr: string;
+  to_addr: string;
+  subject: string;
+  body_text: string | null;
+  received_at: string;
+}
+
+export interface InboxPollResponse {
+  temp_email_addr: string;
+  new_mail_count: number;
+  next_since: string | null;
+  messages: ReceivedEmail[];
+}
+
+export async function generateMailbox(
+  body: unknown,
+): Promise<{ temp_email_addr?: string }> {
   const validationResult = GenerateEmailRequestSchema.safeParse(body);
   if (!validationResult.success) {
     const fieldErrors = validationResult.error.flatten().fieldErrors.username;
@@ -33,16 +53,19 @@ export async function generateMailbox(body: unknown): Promise<{ address?: string
 
   const { username } = validationResult.data;
   const baseUrl = getBackendBaseUrl();
-  const backendResponse = await fetch(`${baseUrl}/api/email/generate`, {
+  const backendResponse = await fetch(`${baseUrl}/api/temporary-address`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username: username ?? null }),
   });
 
   const responseText = await backendResponse.text();
-  let data: { address?: string; error?: string };
+  let data: { temp_email_addr?: string; error?: string };
   try {
-    data = JSON.parse(responseText) as { address?: string; error?: string };
+    data = JSON.parse(responseText) as {
+      temp_email_addr?: string;
+      error?: string;
+    };
   } catch {
     throw new Error(
       responseText || "Received an invalid (non-JSON) response from the backend.",
@@ -56,29 +79,6 @@ export async function generateMailbox(body: unknown): Promise<{ address?: string
   return data;
 }
 
-export async function fetchEmailSummaries(address: string): Promise<unknown> {
-  const baseUrl = getBackendBaseUrl();
-  const backendUrl = `${baseUrl}/api/email/${encodeURIComponent(address)}/summaries`;
-  const backendResponse = await fetch(backendUrl, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-  });
-  const responseText = await backendResponse.text();
-  let data: { error?: string };
-  try {
-    data = JSON.parse(responseText) as { error?: string };
-  } catch {
-    throw new Error(
-      responseText || "Received an invalid response from the backend.",
-    );
-  }
-  if (!backendResponse.ok) {
-    throw new Error(data.error || "Failed to fetch emails from backend.");
-  }
-  return data;
-}
-
 function backendErrorMessage(responseText: string, fallback: string): string {
   try {
     const j = JSON.parse(responseText) as { error?: string };
@@ -88,40 +88,36 @@ function backendErrorMessage(responseText: string, fallback: string): string {
   }
 }
 
-export async function fetchEmailDetail(
+export async function pollInbox(
   address: string,
-  id: string,
-): Promise<unknown> {
+  since: string | null,
+): Promise<InboxPollResponse> {
   const baseUrl = getBackendBaseUrl();
-  const backendUrl = `${baseUrl}/api/email/${encodeURIComponent(address)}/${encodeURIComponent(id)}`;
-  const backendResponse = await fetch(backendUrl);
-  const responseText = await backendResponse.text();
-  if (!backendResponse.ok) {
-    throw new Error(backendErrorMessage(responseText, "Failed to fetch email."));
+  const params = new URLSearchParams({ address });
+  if (since) {
+    params.set("since", since);
   }
-  return JSON.parse(responseText) as unknown;
-}
-
-export async function deleteEmail(address: string, id: string): Promise<unknown> {
-  const baseUrl = getBackendBaseUrl();
-  const backendUrl = `${baseUrl}/api/email/${encodeURIComponent(address)}/${encodeURIComponent(id)}`;
-  const backendResponse = await fetch(backendUrl, { method: "DELETE" });
+  const backendUrl = baseUrl
+    ? `${baseUrl}/api/inbox/poll?${params}`
+    : `/api/inbox/poll?${params}`;
+  const backendResponse = await fetch(backendUrl, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
   const responseText = await backendResponse.text();
-  if (!backendResponse.ok) {
-    throw new Error(backendErrorMessage(responseText, "Failed to delete email."));
+  let data: InboxPollResponse | { error?: string };
+  try {
+    data = JSON.parse(responseText) as InboxPollResponse | { error?: string };
+  } catch {
+    throw new Error(
+      responseText || "Received an invalid response from the backend.",
+    );
   }
-  return JSON.parse(responseText) as unknown;
-}
-
-export async function deleteAllEmails(address: string): Promise<{
-  deleted_count?: number;
-}> {
-  const baseUrl = getBackendBaseUrl();
-  const backendUrl = `${baseUrl}/api/email/${encodeURIComponent(address)}/all`;
-  const backendResponse = await fetch(backendUrl, { method: "DELETE" });
-  const responseText = await backendResponse.text();
   if (!backendResponse.ok) {
-    throw new Error(backendErrorMessage(responseText, "Failed to delete emails."));
+    throw new Error(
+      backendErrorMessage(responseText, "Failed to fetch emails from backend."),
+    );
   }
-  return JSON.parse(responseText) as { deleted_count?: number };
+  return data as InboxPollResponse;
 }

@@ -9,3 +9,8 @@ dotenvy = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+serial_test = "3.4.0"
+testcontainers = "0.27.2"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

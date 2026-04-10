@@ -1,43 +1,28 @@
 import React from "react";
 
-// Matches the EmailDetail struct from the Rust backend
-export interface EmailDetail {
+export interface EmailPayload {
   id: string;
-  from_address: string;
+  from_addr: string;
   subject: string;
-  body_plain: string | null;
-  body_html: string | null;
-  received_at: string; // ISO 8601 date string
+  body_text: string | null;
+  received_at: string;
 }
 
 interface EmailViewProps {
-  email: EmailDetail;
+  email: EmailPayload;
   onClose: () => void;
-  onDelete: (emailId: string) => void;
-  isDeleting: boolean;
 }
 
 export const EmailView: React.FC<EmailViewProps> = ({
   email,
   onClose,
-  onDelete,
-  isDeleting,
 }) => {
-  // Sanitize and render HTML body, or fallback to plain text
+  // Render plain text body returned by the poll API.
   const renderBody = () => {
-    if (email.body_html) {
-      // In a real app, you MUST sanitize this HTML to prevent XSS attacks.
-      // Using a library like DOMPurify is recommended.
-      // For this example, we'''ll trust the source.
+    if (email.body_text) {
       return (
-        <div
-          className="prose prose-invert prose-sm md:prose-base max-w-none"
-          dangerouslySetInnerHTML={{ __html: email.body_html }}
-        />
+        <p className="whitespace-pre-wrap break-words">{email.body_text}</p>
       );
-    }
-    if (email.body_plain) {
-      return <p className="whitespace-pre-wrap">{email.body_plain}</p>;
     }
     return (
       <p className="text-zinc-500 italic">This email has no content.</p>
@@ -59,12 +44,12 @@ export const EmailView: React.FC<EmailViewProps> = ({
           </div>
           <p className="text-sm text-zinc-400">
             <span className="font-medium text-zinc-300">From:</span>{" "}
-            {email.from_address}
+            {email.from_addr}
           </p>
         </header>
 
         {/* Body */}
-        <main className="p-6 overflow-y-auto flex-grow bg-zinc-950/50">
+        <main className="p-6 overflow-y-auto flex-grow bg-zinc-950/50 text-[15px] leading-relaxed text-zinc-300">
           {renderBody()}
         </main>
 
@@ -75,13 +60,6 @@ export const EmailView: React.FC<EmailViewProps> = ({
             className="px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 rounded-md hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
           >
             Back
-          </button>
-          <button
-            onClick={() => onDelete(email.id)}
-            disabled={isDeleting}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-red-800 disabled:cursor-not-allowed"
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
           </button>
         </footer>
       </div>

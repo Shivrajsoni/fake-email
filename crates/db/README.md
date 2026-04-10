@@ -24,6 +24,8 @@ The database is intentionally generic: it does not enforce business rules such a
 
 SQL files live under `crates/db/migrations/` and are compiled into the binary. `run_migrations(pool)` applies any pending versions in order. This matches the common pattern of **schema as code**, versioned with the application.
 
+If your database was created with an older migration set (extra files such as NOTIFY trigger steps), `sqlx` may report checksum or version mismatches. Fix by pointing at a fresh database, or by dropping `_sqlx_migrations` and reconciling the schema manually before re-running migrations.
+
 ### Schema (summary)
 
 | Table             | Role                                                                                                     |
@@ -51,4 +53,4 @@ Any managed Postgres (RDS, Supabase, Neon, self-hosted, etc.) is fine as long as
 ## Related crates
 
 - **`http-server`** — Calls `connect_pool`, `run_migrations`, and the repository helpers for the public API.
-- **`smtp-server`** — Intended to accept mail for your configured domain and insert rows into `received_email` for matching `temporary_email` addresses.
+- **`smtp`** — Intended to accept mail for your configured domain and insert rows into `received_email` for matching `temporary_email` addresses.

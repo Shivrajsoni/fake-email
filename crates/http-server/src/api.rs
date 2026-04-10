@@ -1,4 +1,3 @@
-use crate::address::{full_address, generate_local_part};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -9,8 +8,9 @@ use chrono::{DateTime, Utc};
 use db::{
     find_temporary_email_by_addr, insert_temporary_email, list_received_emails, ReceivedEmail,
 };
+use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use sqlx::postgres::PgPool;
 
 use crate::AppState;
 
@@ -19,7 +19,6 @@ pub struct CreateTempAddressBody {
     pub username: Option<String>,
 }
 
-/// Only the address string — no tokens or sign-in; knowing the address is the inbox key.
 #[derive(Debug, Serialize)]
 pub struct CreateTempAddressResponse {
     pub temp_email_addr: String,
@@ -32,33 +31,29 @@ pub struct InboxByAddressQuery {
 }
 
 #[derive(Debug, Serialize)]
-pub struct MailMessage {
-    pub id: Uuid,
-    pub from_addr: Option<String>,
-    pub to_addr: Option<String>,
-    pub subject: Option<String>,
-    pub body_text: Option<String>,
-    pub received_at: DateTime<Utc>,
-}
-
-/// Structured poll result for one temp address (`since` = RFC3339, only rows with `received_at` > `since`).
-#[derive(Debug, Serialize)]
 pub struct PollInboxResponse {
     pub temp_email_addr: String,
-    pub has_new: bool,
     pub new_mail_count: usize,
-    /// Use as `since` on the next poll to fetch only newer mail (largest `received_at` in this batch).
     pub next_since: Option<DateTime<Utc>>,
-    pub messages: Vec<MailMessage>,
+    pub messages: Vec<ReceivedEmail>,
 }
 
 fn pool_unavailable() -> Response {
     (StatusCode::SERVICE_UNAVAILABLE, "database not ready").into_response()
 }
 
+fn db_error(e: sqlx::Error) -> Response {
+    tracing::error!(error = %e, "database");
+    (StatusCode::INTERNAL_SERVER_ERROR, "database error").into_response()
+}
+
+async fn get_pool(state: &AppState) -> Result<PgPool, Response> {
+    state.pool.read().await.clone().ok_or_else(pool_unavailable)
+}
+
 fn is_unique_violation(e: &sqlx::Error) -> bool {
     match e {
-        sqlx::Error::Database(dbe) => dbe.code().map_or(false, |c| c == "23505"),
+        sqlx::Error::Database(dbe) => dbe.code().is_some_and(|c| c == "23505"),
         _ => false,
     }
 }
@@ -67,18 +62,11 @@ pub async fn create_temporary_address(
     State(state): State<AppState>,
     Json(body): Json<CreateTempAddressBody>,
 ) -> Result<Json<CreateTempAddressResponse>, Response> {
-    let pool = {
-        let g = state.pool.read().await;
-        g.clone().ok_or_else(pool_unavailable)?
-    };
-
+    let pool = get_pool(&state).await?;
     let domain = state.mail_domain.as_ref();
-    const MAX_ATTEMPTS: u32 = 3;
 
-    for _ in 0..MAX_ATTEMPTS {
-        let local = generate_local_part(body.username.as_deref());
-        let addr = full_address(&local, domain);
-
+    for _ in 0..3u8 {
+        let addr = full_address(&generate_local_part(body.username.as_deref()), domain);
         match insert_temporary_email(&pool, &addr).await {
             Ok(row) => {
                 return Ok(Json(CreateTempAddressResponse {
@@ -86,10 +74,7 @@ pub async fn create_temporary_address(
                 }));
             }
             Err(e) if is_unique_violation(&e) => continue,
-            Err(e) => {
-                tracing::error!(error = %e, "insert temporary_email failed");
-                return Err((StatusCode::INTERNAL_SERVER_ERROR, "database error").into_response());
-            }
+            Err(e) => return Err(db_error(e)),
         }
     }
 
@@ -104,10 +89,7 @@ pub async fn poll_inbox_by_address(
     State(state): State<AppState>,
     Query(q): Query<InboxByAddressQuery>,
 ) -> Result<Json<PollInboxResponse>, Response> {
-    let pool = {
-        let g = state.pool.read().await;
-        g.clone().ok_or_else(pool_unavailable)?
-    };
+    let pool = get_pool(&state).await?;
 
     let addr = q.address.trim();
     if addr.is_empty() || !addr.contains('@') {
@@ -116,48 +98,33 @@ pub async fn poll_inbox_by_address(
 
     let temp = find_temporary_email_by_addr(&pool, addr)
         .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "find temporary_email by addr failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "database error").into_response()
-        })?
+        .map_err(db_error)?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "unknown temporary address").into_response())?;
 
-    let since = parse_since_optional(q.since.as_deref()).map_err(bad_request)?;
+    let since = parse_since(q.since.as_deref()).map_err(|msg| {
+        (StatusCode::BAD_REQUEST, msg).into_response()
+    })?;
 
-    let rows = list_received_emails(&pool, temp.id, since)
+    let messages = list_received_emails(&pool, temp.id, since)
         .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "list received_email failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "database error").into_response()
-        })?;
+        .map_err(db_error)?;
 
-    let messages: Vec<MailMessage> = rows.iter().map(to_mail_message).collect();
     let new_mail_count = messages.len();
-    let has_new = new_mail_count > 0;
-    let next_since = messages.iter().map(|m| m.received_at).max();
+    let next_since = match messages.iter().map(|m| m.received_at).max() {
+        Some(max_ts) => Some(max_ts),
+        None => since,
+    };
 
     Ok(Json(PollInboxResponse {
         temp_email_addr: temp.temp_email_addr,
-        has_new,
         new_mail_count,
         next_since,
         messages,
     }))
 }
 
-fn to_mail_message(r: &ReceivedEmail) -> MailMessage {
-    MailMessage {
-        id: r.id,
-        from_addr: r.from_addr.clone(),
-        to_addr: r.to_addr.clone(),
-        subject: r.subject.clone(),
-        body_text: r.body_text.clone(),
-        received_at: r.received_at,
-    }
-}
-
-fn parse_since_optional(s: Option<&str>) -> Result<Option<DateTime<Utc>>, String> {
-    let Some(raw) = s.filter(|x| !x.is_empty()) else {
+fn parse_since(s: Option<&str>) -> Result<Option<DateTime<Utc>>, String> {
+    let Some(raw) = s.map(str::trim).filter(|x| !x.is_empty()) else {
         return Ok(None);
     };
     DateTime::parse_from_rfc3339(raw)
@@ -165,6 +132,38 @@ fn parse_since_optional(s: Option<&str>) -> Result<Option<DateTime<Utc>>, String
         .map_err(|_| format!("since must be RFC3339, got {raw:?}"))
 }
 
-fn bad_request(msg: String) -> Response {
-    (StatusCode::BAD_REQUEST, msg).into_response()
+fn generate_local_part(username: Option<&str>) -> String {
+    let mut rng = rand::thread_rng();
+    let prefix: String = username
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .take(5)
+                .collect::<String>()
+                .to_lowercase()
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            (&mut rng)
+                .sample_iter(&Alphanumeric)
+                .take(5)
+                .map(char::from)
+                .collect::<String>()
+                .to_lowercase()
+        });
+
+    let suffix: String = (&mut rng)
+        .sample_iter(&Alphanumeric)
+        .take(3)
+        .map(char::from)
+        .collect::<String>()
+        .to_lowercase();
+
+    format!("{prefix}{suffix}")
+}
+
+fn full_address(local_part: &str, domain: &str) -> String {
+    format!("{local_part}@{domain}")
 }
