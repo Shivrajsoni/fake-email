@@ -41,24 +41,35 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: http-server
-          path: ./bin
+          path: artifact
+      - name: Flatten artifact (upload preserves result/bin/… layout)
+        run: |
+          set -euxo pipefail
+          find artifact -type f
+          SRC="$(find artifact -type f -name http-server | head -1)"
+          test -n "$SRC"
+          cp "$SRC" ./http-server
+          chmod +x ./http-server
+          file ./http-server
+          ls -la ./http-server
       - name: Upload binary to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: ./bin/http-server
+          source: http-server
           target: /tmp/
-          strip_components: 1
       - name: Install and restart
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
           script: |
             set -euo pipefail
+            test -f /tmp/http-server
             sudo cp -f /tmp/http-server /opt/fake-email/bin/http-server
             sudo chmod +x /opt/fake-email/bin/http-server
             sudo systemctl restart fake-email
