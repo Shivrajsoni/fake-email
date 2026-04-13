@@ -1,0 +1,67 @@
+name: nix-backend
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore: ["ui/**", "**.md"]
+  pull_request:
+    paths-ignore: ["ui/**", "**.md"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Build backend
+        run: nix build .#backend --print-build-logs
+      - name: Verify binary
+        run: |
+          file ./result/bin/http-server
+          ls -lh ./result/bin/http-server
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-server
+          path: ./result/bin/http-server
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: http-server
+          path: ./bin
+      - name: Upload binary to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: ./bin/http-server
+          target: /tmp/
+          strip_components: 1
+      - name: Install and restart
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            sudo cp -f /tmp/http-server /opt/fake-email/bin/http-server
+            sudo chmod +x /opt/fake-email/bin/http-server
+            sudo systemctl restart fake-email
+            sleep 2
+            curl -sf --max-time 5 http://127.0.0.1:3001/api/health && echo "Deploy OK" || echo "Deploy FAILED"
+            rm -f /tmp/http-server

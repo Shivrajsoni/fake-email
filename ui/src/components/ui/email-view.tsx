@@ -1,4 +1,8 @@
+"use client";
+
 import React from "react";
+import { motion } from "motion/react";
+import { X } from "lucide-react";
 
 export interface EmailPayload {
   id: string;
@@ -13,56 +17,87 @@ interface EmailViewProps {
   onClose: () => void;
 }
 
-export const EmailView: React.FC<EmailViewProps> = ({
-  email,
-  onClose,
-}) => {
-  // Render plain text body returned by the poll API.
-  const renderBody = () => {
-    if (email.body_text) {
-      return (
-        <p className="whitespace-pre-wrap break-words">{email.body_text}</p>
-      );
-    }
-    return (
-      <p className="text-zinc-500 italic">This email has no content.</p>
-    );
-  };
+const ease = [0.22, 1, 0.36, 1] as const;
+
+export const EmailView: React.FC<EmailViewProps> = ({ email, onClose }) => {
+  const formattedDate = new Date(email.received_at).toLocaleString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col">
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-ink/30 backdrop-blur-sm"
+        onClick={onClose}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+        role="button"
+        tabIndex={-1}
+        aria-label="Close email"
+      />
+
+      {/* Card with hard shadow */}
+      <motion.article
+        className="relative bg-page border-2 border-ink w-full max-w-2xl max-h-[85vh] flex flex-col"
+        style={{ boxShadow: "8px 8px 0 0 var(--color-ink)" }}
+        initial={{ scale: 0.95, y: 20, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.95, y: 20, opacity: 0 }}
+        transition={{ duration: 0.25, ease }}
+      >
         {/* Header */}
-        <header className="p-4 border-b border-zinc-800 flex-shrink-0">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-xl font-bold text-zinc-100 truncate">
-              {email.subject}
-            </h2>
-            <p className="text-sm text-zinc-400 flex-shrink-0 pl-4">
-              {new Date(email.received_at).toLocaleString()}
-            </p>
+        <header className="p-5 sm:p-6 border-b-2 border-chalk shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display font-extrabold text-xl sm:text-2xl text-ink leading-tight mb-3">
+                {email.subject || "(no subject)"}
+              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm">
+                <p className="text-smoke">
+                  <span className="font-semibold text-ink">From</span>{" "}
+                  <span className="font-mono text-xs">
+                    {email.from_addr || "unknown"}
+                  </span>
+                </p>
+                <time className="text-ash text-xs">{formattedDate}</time>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="shrink-0 w-10 h-10 flex items-center justify-center border-2 border-ink hover:bg-ink hover:text-page transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermillion"
+              aria-label="Close email"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <p className="text-sm text-zinc-400">
-            <span className="font-medium text-zinc-300">From:</span>{" "}
-            {email.from_addr}
-          </p>
         </header>
 
         {/* Body */}
-        <main className="p-6 overflow-y-auto flex-grow bg-zinc-950/50 text-[15px] leading-relaxed text-zinc-300">
-          {renderBody()}
-        </main>
-
-        {/* Footer / Actions */}
-        <footer className="p-3 border-t border-zinc-800 flex-shrink-0 flex justify-end items-center gap-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 rounded-md hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
-          >
-            Back
-          </button>
-        </footer>
-      </div>
-    </div>
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+          {email.body_text ? (
+            <div className="text-[15px] leading-[1.8] text-ink whitespace-pre-wrap wrap-break-word">
+              {email.body_text}
+            </div>
+          ) : (
+            <p className="text-smoke italic text-sm">
+              This email has no body content.
+            </p>
+          )}
+        </div>
+      </motion.article>
+    </motion.div>
   );
 };

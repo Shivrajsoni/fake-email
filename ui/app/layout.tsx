@@ -1,16 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Syne, Outfit, JetBrains_Mono } from "next/font/google";
 import "../src/globals.css";
 
-const inter = Inter({
+const syne = Syne({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-app-sans",
+  variable: "--font-syne",
+});
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-outfit",
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jetbrains",
 });
 
 export const metadata: Metadata = {
   title: "Fake Email",
-  description: "Temporary inbox for fast testing",
+  description: "Disposable email inboxes for developers — no signup, no tracking",
 };
 
 export default function RootLayout({
@@ -21,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${inter.variable}`}
+      className={`${syne.variable} ${outfit.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
       <body>{children}</body>

@@ -4,20 +4,21 @@ use sqlx::postgres::PgPool;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
+const MAX_LINE_LEN: usize = 4096;
+const MAX_DATA_BYTES: usize = 10 * 1024 * 1024;
+
 #[derive(Clone)]
 struct Recipient {
     id: uuid::Uuid,
     addr: String,
 }
 
-/// Start SMTP listener on `host:port` and process connections forever.
 pub async fn run_server(host: &str, port: u16, pool: PgPool) -> Result<(), std::io::Error> {
     let listener = TcpListener::bind((host, port)).await?;
-    tracing::info!(%host, port, "smtp listener started");
+    tracing::info!(%host, port, "smtp listening");
     run_server_on_listener(listener, pool).await
 }
 
-/// Run SMTP server on an existing listener (useful for tests with port 0).
 pub async fn run_server_on_listener(
     listener: TcpListener,
     pool: PgPool,
@@ -27,10 +28,25 @@ pub async fn run_server_on_listener(
         let pool = pool.clone();
         tokio::spawn(async move {
             if let Err(e) = handle_client(socket, pool).await {
-                tracing::error!(error = %e, "smtp client session failed");
+                tracing::error!(error = %e, "smtp session failed");
             }
         });
     }
+}
+
+async fn read_limited_line(
+    reader: &mut BufReader<tokio::net::tcp::OwnedReadHalf>,
+    buf: &mut String,
+) -> Result<usize, std::io::Error> {
+    buf.clear();
+    let n = reader.read_line(buf).await?;
+    if n > MAX_LINE_LEN {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "line exceeds maximum length",
+        ));
+    }
+    Ok(n)
 }
 
 async fn handle_client(socket: TcpStream, pool: PgPool) -> Result<(), std::io::Error> {
@@ -43,10 +59,10 @@ async fn handle_client(socket: TcpStream, pool: PgPool) -> Result<(), std::io::E
     let mut recipients: Vec<Recipient> = Vec::new();
     let mut in_data = false;
     let mut data_buf = String::new();
+    let mut line = String::new();
 
     loop {
-        let mut line = String::new();
-        let n = reader.read_line(&mut line).await?;
+        let n = read_limited_line(&mut reader, &mut line).await?;
         if n == 0 {
             break;
         }
@@ -62,7 +78,16 @@ async fn handle_client(socket: TcpStream, pool: PgPool) -> Result<(), std::io::E
                 in_data = false;
                 writer.write_all(b"250 queued\r\n").await?;
             } else {
-                data_buf.push_str(cmd);
+                if data_buf.len() + cmd.len() + 2 > MAX_DATA_BYTES {
+                    data_buf.clear();
+                    in_data = false;
+                    mail_from = None;
+                    recipients.clear();
+                    writer.write_all(b"552 message too large\r\n").await?;
+                    continue;
+                }
+                let destuffed = cmd.strip_prefix('.').unwrap_or(cmd);
+                data_buf.push_str(destuffed);
                 data_buf.push_str("\r\n");
             }
             continue;
@@ -100,9 +125,7 @@ async fn handle_client(socket: TcpStream, pool: PgPool) -> Result<(), std::io::E
 
         if upper.starts_with("RCPT TO:") {
             if mail_from.is_none() {
-                writer
-                    .write_all(b"503 MAIL FROM required first\r\n")
-                    .await?;
+                writer.write_all(b"503 MAIL FROM required first\r\n").await?;
                 continue;
             }
             let Some(addr) = extract_path(cmd) else {
@@ -110,9 +133,11 @@ async fn handle_client(socket: TcpStream, pool: PgPool) -> Result<(), std::io::E
                 continue;
             };
 
-            match find_temporary_email_by_addr(&pool, &addr).await {
+            let addr_lower = addr.to_ascii_lowercase();
+
+            match find_temporary_email_by_addr(&pool, &addr_lower).await {
                 Ok(Some(temp)) => {
-                    recipients.push(Recipient { id: temp.id, addr });
+                    recipients.push(Recipient { id: temp.id, addr: addr_lower });
                     writer.write_all(b"250 ok\r\n").await?;
                 }
                 Ok(None) => {
@@ -144,17 +169,11 @@ async fn handle_client(socket: TcpStream, pool: PgPool) -> Result<(), std::io::E
 
 async fn persist_message(pool: &PgPool, from_addr: Option<&str>, rcpts: &[Recipient], raw: &str) {
     let parsed = MessageParser::default().parse(raw.as_bytes());
-    let subject = parsed
-        .as_ref()
-        .and_then(|m| m.subject())
-        .map(|s| s.to_string());
-    let body_text = parsed
-        .as_ref()
-        .and_then(|m| m.body_text(0))
-        .map(|s| s.into_owned());
+    let subject = parsed.as_ref().and_then(|m| m.subject()).map(|s| s.to_string());
+    let body_text = parsed.as_ref().and_then(|m| m.body_text(0)).map(|s| s.into_owned());
 
     for rcpt in rcpts {
-        let _ = insert_received_email(
+        if let Err(e) = insert_received_email(
             pool,
             rcpt.id,
             from_addr,
@@ -162,7 +181,10 @@ async fn persist_message(pool: &PgPool, from_addr: Option<&str>, rcpts: &[Recipi
             subject.as_deref(),
             body_text.as_deref(),
         )
-        .await;
+        .await
+        {
+            tracing::error!(error = %e, rcpt = %rcpt.addr, "failed to persist email");
+        }
     }
 }
 
@@ -170,9 +192,5 @@ fn extract_path(cmd: &str) -> Option<String> {
     let start = cmd.find('<')?;
     let end = cmd[start + 1..].find('>')? + start + 1;
     let value = cmd[start + 1..end].trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.to_string())
-    }
+    if value.is_empty() { None } else { Some(value.to_string()) }
 }

@@ -1,6 +1,6 @@
 target/
+result
 .env
 **/*.rs.bk
-Cargo.lock
 .next/
 .DS_Store
