@@ -1,78 +1,62 @@
 # `http-server` — HTTP API + SMTP for temporary mail
 
-Single binary that runs both the HTTP API (Axum, port 3001) and inbound SMTP (port 25). Connects to Postgres via `DATABASE_URL`.
+Single binary that runs both the HTTP API (Axum) and inbound SMTP. Connects to Postgres via `DATABASE_URL`.
+
+For the **full project** overview (UI, DNS, CI, EC2), see the repository root `[README.md](../../README.md)`.
 
 ## API
 
-| Method | Path                     | Description                              |
-| ------ | ------------------------ | ---------------------------------------- |
-| `GET`  | `/api/health`            | 200 if DB ready, 503 if not              |
+
+| Method | Path                     | Description                                                 |
+| ------ | ------------------------ | ----------------------------------------------------------- |
+| `GET`  | `/api/health`            | 200 if DB ready, 503 if not                                 |
 | `POST` | `/api/temporary-address` | `{ "username": optional }` → `{ "temp_email_addr": "..." }` |
-| `GET`  | `/api/inbox/poll`        | `?address=...&since=...` → messages      |
+| `GET`  | `/api/inbox/poll`        | `?address=...&since=...` → messages                         |
+
 
 ## Environment variables
 
-| Variable                  | Required | Default        | Role                                    |
-| ------------------------- | -------- | -------------- | --------------------------------------- |
-| `DATABASE_URL`            | yes      |                | Postgres connection string              |
-| `DOMAIN`                  | yes      |                | Mail domain for generated addresses     |
-| `HTTP_HOST`               | no       | `0.0.0.0`      | HTTP bind address                       |
-| `HTTP_PORT`               | no       | `3001`         | HTTP bind port                          |
-| `SMTP_HOST`               | no       | `0.0.0.0`      | SMTP bind address                       |
-| `SMTP_PORT`               | no       | `25`           | SMTP bind port                          |
-| `CORS_ALLOWED_ORIGINS`    | no       |                | Comma-separated origins for browser CORS |
 
-## Build with Nix
+| Variable                 | Required | Default   | Role                                                                       |
+| ------------------------ | -------- | --------- | -------------------------------------------------------------------------- |
+| `DATABASE_URL`           | yes      |           | Postgres connection string                                                 |
+| `DOMAIN` / `MAIL_DOMAIN` | yes      |           | Mail domain for generated addresses                                        |
+| `HTTP_HOST`              | no       | `0.0.0.0` | HTTP bind address                                                          |
+| `HTTP_PORT`              | no       | `3001`    | HTTP bind port                                                             |
+| `SMTP_HOST`              | no       | `0.0.0.0` | SMTP bind address (use `0.0.0.0` in prod so port 25 accepts internet mail) |
+| `SMTP_PORT`              | no       | `25`      | SMTP bind port                                                             |
+| `CORS_ALLOWED_ORIGINS`   | no       |           | Comma-separated origins for browser CORS                                   |
+| `PURGE_HOUR_UTC`         | no       | `3`       | Hour (0–23 UTC) for daily data purge                                       |
+
+
+## Build with Nix (same as CI)
 
 ```bash
-nix build .#backend
+nix build .#backend --extra-experimental-features "nix-command flakes"
 ./result/bin/http-server
 ```
 
+On macOS this produces a **macOS** binary; production uses the **Linux** artifact built in GitHub Actions.
+
 ## Production deploy (Ubuntu EC2 + Caddy)
 
-The `deploy/` directory has everything you need:
-
-```
-deploy/
-├── setup.sh              # one-command setup script
-├── fake-email.service    # systemd unit
-└── Caddyfile             # reverse proxy config
-```
-
-### How it works
+`[deploy/setup.sh](../../deploy/setup.sh)` installs Caddy and writes `/etc/caddy/Caddyfile` for `api.<domain>`. `[deploy/fake-email.service](../../deploy/fake-email.service)` is the systemd unit.
 
 ```
 Internet                     EC2 (Ubuntu)
 ─────────────────────────────────────────────
 :443 HTTPS ──► Caddy ──► localhost:3001 (HTTP API)
-:80  HTTP  ──► Caddy ──► (redirect to 443)
-:25  SMTP  ──────────────► localhost:25 (SMTP server)
+:80  HTTP  ──► Caddy ──► (ACME / redirect)
+:25  SMTP  ──────────────► :25 (SMTP server, bind 0.0.0.0)
 ```
 
-- **Caddy** handles TLS certificates automatically (Let's Encrypt), listens on 80/443, proxies to your Rust binary on 3001
-- **SMTP** binds directly to port 25 (no proxy needed — SMTP doesn't use TLS for receive in this setup)
-- **systemd** manages the backend process (auto-restart, runs as unprivileged user)
+### CI/CD (push to `main`)
 
-### CI/CD deploy flow (recommended)
+1. GitHub Actions runs `nix build .#backend` on `ubuntu-latest`.
+2. The `http-server` binary is uploaded as a workflow artifact.
+3. The deploy job SCPs it to EC2 and runs `systemctl restart fake-email`.
 
-Pushing to `main` triggers automatic deployment:
-
-1. GitHub Actions builds the binary on a CI runner (7 GB RAM — no resource constraints)
-2. The build is pushed to **Cachix** (binary cache)
-3. CI SSHs into EC2 and runs `nix build .#backend` which **downloads** the pre-built binary from Cachix (no compilation on EC2)
-4. The binary is copied to `/opt/fake-email/bin/` and the service is restarted
-
-The binary links against OpenSSL dynamically via Nix store paths, so Nix must be present on the EC2 box to resolve `/nix/store/...` library paths. Cachix ensures no compilation happens on the server.
-
-**Required GitHub secrets:**
-
-| Secret           | Value                                    |
-| ---------------- | ---------------------------------------- |
-| `CACHIX_AUTH_TOKEN` | Cachix auth token for the `fake-email` cache |
-| `EC2_HOST`       | Elastic IP or hostname of the EC2 instance |
-| `EC2_USER`       | SSH user (typically `ubuntu`)            |
-| `EC2_SSH_KEY`    | Private SSH key for the EC2 instance     |
+**GitHub secrets:** `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY` (see root `README.md`).
 
 ### First-time EC2 setup
 
@@ -83,28 +67,29 @@ VERCEL_ORIGIN="https://your-app.vercel.app" \
 ./deploy/setup.sh
 ```
 
-### AWS specs
+### AWS
 
-| Resource        | Recommended                     |
-| --------------- | ------------------------------- |
-| Instance        | t3.micro (1 GB) or t3.small (2 GB) |
-| Volume          | 20 GB gp3                       |
-| Security group  | Inbound TCP: 22, 25, 80, 443   |
-| Elastic IP      | Required (DNS + MX records)     |
 
-### DNS records
+| Resource       | Recommended                  |
+| -------------- | ---------------------------- |
+| Instance       | t3.micro or t3.small         |
+| Security group | Inbound TCP: 22, 25, 80, 443 |
+| Elastic IP     | Recommended for stable DNS   |
 
-| Type | Name                | Value                           |
-| ---- | ------------------- | ------------------------------- |
-| A    | api.fake-email.site | EC2 Elastic IP                  |
-| A    | fake-email.site     | EC2 Elastic IP                  |
-| MX   | fake-email.site     | fake-email.site (priority 10)   |
-| TXT  | fake-email.site     | `v=spf1 ip4:<Elastic IP> ~all`  |
+
+### DNS (recommended shape)
+
+
+| Type | Name                   | Value                                     |
+| ---- | ---------------------- | ----------------------------------------- |
+| A    | `api.fake-email.site`  | EC2 Elastic IP                            |
+| A    | `mail.fake-email.site` | EC2 Elastic IP                            |
+| MX   | `fake-email.site`      | `mail.fake-email.site` (priority 1 or 10) |
+| TXT  | `fake-email.site`      | `v=spf1 ip4:<Elastic IP> ~all`            |
+
 
 ## Vercel UI
 
-Set in Vercel project environment:
-- `NEXT_PUBLIC_API_URL=https://api.fake-email.site`
+- Vercel: `NEXT_PUBLIC_API_URL=https://api.fake-email.site`
+- EC2 `/etc/fake-email/env`: `CORS_ALLOWED_ORIGINS=https://your-app.vercel.app`
 
-Set on EC2 in `/etc/fake-email/env`:
-- `CORS_ALLOWED_ORIGINS=https://your-app.vercel.app`
