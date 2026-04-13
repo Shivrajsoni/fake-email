@@ -7,33 +7,38 @@ on:
   pull_request:
     paths-ignore: ["ui/**", "**.md"]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v31
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq pkg-config libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-      - name: Build backend
-        run: nix build .#backend --print-build-logs
-      - name: Verify binary
+          workspaces: "."
+      - run: cargo build --release -p http-server --locked
+      - name: Verify ELF (no Nix interpreter)
         run: |
-          file ./result/bin/http-server
-          ls -lh ./result/bin/http-server
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          set -euo pipefail
+          file ./target/release/http-server
+          if file ./target/release/http-server | grep -q /nix/store; then exit 1; fi
+          ldd ./target/release/http-server | head -20
+      - uses: actions/upload-artifact@v4
         with:
           name: http-server
-          path: ./result/bin/http-server
+          path: ./target/release/http-server
           retention-days: 7
 
   deploy:
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
       group: deploy-production
       cancel-in-progress: false
@@ -42,26 +47,20 @@ jobs:
         with:
           name: http-server
           path: artifact
-      - name: Flatten artifact (upload preserves result/bin/… layout)
-        run: |
+      - run: |
           set -euxo pipefail
-          find artifact -type f
           SRC="$(find artifact -type f -name http-server | head -1)"
           test -n "$SRC"
-          cp "$SRC" ./http-server
-          chmod +x ./http-server
+          cp "$SRC" ./http-server && chmod +x ./http-server
           file ./http-server
-          ls -la ./http-server
-      - name: Upload binary to EC2
-        uses: appleboy/scp-action@v0.1.7
+      - uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: http-server
           target: /tmp/
-      - name: Install and restart
-        uses: appleboy/ssh-action@v1
+      - uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -70,9 +69,16 @@ jobs:
           script: |
             set -euo pipefail
             test -f /tmp/http-server
-            sudo cp -f /tmp/http-server /opt/fake-email/bin/http-server
-            sudo chmod +x /opt/fake-email/bin/http-server
+            sudo mkdir -p /opt/fake-email/bin
+            sudo install -m 0755 -o root -g root /tmp/http-server /opt/fake-email/bin/http-server
+            sudo systemctl daemon-reload || true
             sudo systemctl restart fake-email
-            sleep 2
-            curl -sf --max-time 5 http://127.0.0.1:3001/api/health && echo "Deploy OK" || echo "Deploy FAILED"
+            sleep 3
+            sudo systemctl is-active --quiet fake-email
+            curl -sf --max-time 20 http://127.0.0.1:3001/api/health | grep -q OK || {
+              sudo systemctl status fake-email --no-pager -l || true
+              sudo journalctl -u fake-email -n 80 --no-pager || true
+              sudo ldd /opt/fake-email/bin/http-server || true
+              exit 1
+            }
             rm -f /tmp/http-server

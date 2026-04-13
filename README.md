@@ -8,18 +8,16 @@ Temporary email addresses: **Next.js** UI (Vercel), **Rust** backend on **EC2** 
 
 ## Repo
 
-| Path | What |
-|------|------|
-| `crates/http-server/` | Main binary: HTTP API + startup |
-| `crates/smtp/` | Inbound SMTP |
-| `crates/db/` | Postgres + SQL migrations |
-| `ui/` | Next.js app |
-| `deploy/` | EC2 setup (`setup.sh`, systemd unit) |
-| `flake.nix` | Nix build (same as CI) |
+| Path                  | What                                                                      |
+| --------------------- | ------------------------------------------------------------------------- |
+| `crates/http-server/` | Main binary: HTTP API + startup                                           |
+| `crates/smtp/`        | Inbound SMTP                                                              |
+| `crates/db/`          | Postgres + SQL migrations                                                 |
+| `ui/`                 | Next.js app                                                               |
+| `deploy/`             | EC2 setup (`setup.sh`, systemd unit)                                      |
+| `flake.nix`           | Nix build (local / reproducibility; CI uses **Cargo** for the EC2 binary) |
 
-More detail: [`crates/http-server/README.md`](crates/http-server/README.md), [`ui/README.md`](ui/README.md).
-
----
+UI: [`ui/README.md`](ui/README.md).
 
 ## Run locally
 
@@ -41,7 +39,7 @@ git clone <repo> && cd fake-email
 DATABASE_URL='postgres://…' VERCEL_ORIGIN='https://<app>.vercel.app' ./deploy/setup.sh
 ```
 
-Then push to **`main`**: GitHub Actions builds the **Linux** binary with Nix, copies it to EC2, restarts the service.
+Then push to **`main`**: GitHub Actions runs **`cargo build --release`** on Ubuntu (glibc/OpenSSL match stock EC2), copies the binary to EC2, restarts the service. A **Nix-built** binary points at `/nix/store/...` and **will not run** on plain Ubuntu without Nix.
 
 **GitHub secrets:** `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`.
 
@@ -49,7 +47,7 @@ Then push to **`main`**: GitHub Actions builds the **Linux** binary with Nix, co
 
 **Vercel:** `NEXT_PUBLIC_API_URL=https://api.fake-email.site` and set `CORS_ALLOWED_ORIGINS` on the server to your Vercel URL.
 
-**Notes:** New AWS accounts may block port **25** until you ask AWS to lift it. `nix build` on a Mac is **not** the same binary as CI (Linux)—use the CI artifact for EC2.
+**Notes:** New AWS accounts may block port **25** until you ask AWS to lift it. EC2 needs **`libssl3`** (default on Ubuntu 22.04+); if `http-server` fails to start, run `ldd /opt/fake-email/bin/http-server` on the server.
 
 ---
 
