@@ -40,8 +40,8 @@ ok "IP: ${PUBLIC_IP}"
 
 step "2/7 Packages"
 sudo apt-get update -qq
-sudo apt-get install -y -qq curl jq netcat-openbsd
-ok "curl, jq, nc"
+sudo apt-get install -y -qq curl jq netcat-openbsd ca-certificates libssl3
+ok "curl, jq, nc, libssl3 (runtime for http-server)"
 
 step "3/7 DB reachability"
 DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
