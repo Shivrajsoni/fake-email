@@ -94,7 +94,12 @@ if command -v ufw &>/dev/null; then
   sudo ufw --force enable >/dev/null 2>&1 || true
   ok "UFW 22,25,80,443"
 else warn "Configure SG for 22,25,80,443"; fi
-if [ -f /opt/fake-email/bin/http-server ]; then sudo systemctl restart fake-email; sleep 2; fi
+if [ -f /opt/fake-email/bin/http-server ]; then
+  sudo systemctl restart fake-email
+  for i in {1..30}; do
+    curl -sf --max-time 2 http://127.0.0.1:3001/api/health | grep -q OK && break || sleep 1
+  done
+fi
 sudo systemctl restart caddy
 sleep 1
 
