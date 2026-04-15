@@ -52,7 +52,7 @@ sudo mkdir -p /opt/fake-email/bin
 if [ -f /opt/fake-email/bin/http-server ]; then ok "Binary present"; else warn "No binary yet — deploy from CI"; fi
 if id -u fake-email &>/dev/null; then ok "User fake-email"; else sudo useradd --system --no-create-home --shell /usr/sbin/nologin fake-email; ok "Created fake-email"; fi
 sudo mkdir -p /etc/fake-email
-CORS_ORIGINS="${VERCEL_ORIGIN:-https://${MAIL_DOMAIN}}"
+CORS_ORIGINS="${VERCEL_ORIGIN:-https://${MAIL_DOMAIN},https://www.${MAIL_DOMAIN}}"
 sudo tee /etc/fake-email/env > /dev/null <<EOF
 DATABASE_URL=${DATABASE_URL}
 DOMAIN=${MAIL_DOMAIN}

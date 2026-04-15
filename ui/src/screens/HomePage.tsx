@@ -66,38 +66,41 @@ export function HomePage() {
               visible: { transition: { staggerChildren: 0.1 } },
             }}
           >
-            <div className="overflow-hidden">
-              <motion.h1
-                className="font-display text-[clamp(2.8rem,8vw,7rem)] font-extrabold leading-[0.88] tracking-[-0.03em] select-none"
-                variants={{
-                  hidden: { y: "100%" },
-                  visible: {
-                    y: 0,
-                    transition: { duration: 0.8, ease },
-                  },
-                }}
-              >
-                DISPOSABLE
-              </motion.h1>
-            </div>
-            <div className="overflow-hidden">
-              <motion.h1
-                className="font-display text-[clamp(2.8rem,8vw,7rem)] font-extrabold leading-[0.88] tracking-[-0.03em] flex items-baseline gap-2 sm:gap-4 select-none"
-                variants={{
-                  hidden: { y: "100%" },
-                  visible: {
-                    y: 0,
-                    transition: { duration: 0.8, ease },
-                  },
-                }}
-              >
-                EMAIL
-                <span
-                  className="inline-block w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-vermillion shrink-0 motion-safe:animate-dot-pulse"
-                  aria-hidden="true"
-                />
-              </motion.h1>
-            </div>
+            <h1 className="select-none">
+              <span className="sr-only">DISPOSABLE EMAIL</span>
+              <div className="overflow-hidden" aria-hidden="true">
+                <motion.span
+                  className="block font-display text-[clamp(2.8rem,8vw,7rem)] font-extrabold leading-[0.88] tracking-[-0.03em]"
+                  variants={{
+                    hidden: { y: "100%" },
+                    visible: {
+                      y: 0,
+                      transition: { duration: 0.8, ease },
+                    },
+                  }}
+                >
+                  DISPOSABLE
+                </motion.span>
+              </div>
+              <div className="overflow-hidden" aria-hidden="true">
+                <motion.span
+                  className="block font-display text-[clamp(2.8rem,8vw,7rem)] font-extrabold leading-[0.88] tracking-[-0.03em] flex items-baseline gap-2 sm:gap-4"
+                  variants={{
+                    hidden: { y: "100%" },
+                    visible: {
+                      y: 0,
+                      transition: { duration: 0.8, ease },
+                    },
+                  }}
+                >
+                  EMAIL
+                  <span
+                    className="inline-block w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-vermillion shrink-0 motion-safe:animate-dot-pulse"
+                    aria-hidden="true"
+                  />
+                </motion.span>
+              </div>
+            </h1>
 
             <motion.p
               className="mt-5 sm:mt-6 text-smoke text-base sm:text-lg tracking-tight max-w-md"

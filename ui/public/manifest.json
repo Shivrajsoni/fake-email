@@ -1,0 +1,16 @@
+{
+  "name": "Fake Email - Disposable & Anonymous Inboxes",
+  "short_name": "Fake Email",
+  "description": "Generate disposable email addresses instantly. No signups, no tracking.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff3b3b",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}
