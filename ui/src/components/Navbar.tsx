@@ -32,7 +32,7 @@ export function Navbar() {
       </Link>
       <div className="flex items-center gap-4">
         <a
-          href="https://github.com"
+          href="https://github.com/Shivrajsoni/fake-email"
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs font-bold uppercase tracking-widest text-smoke hover:text-vermillion transition-colors"
