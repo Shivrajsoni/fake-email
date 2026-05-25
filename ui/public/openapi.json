@@ -1,0 +1,114 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fake Email API",
+    "version": "1.0.0",
+    "description": "Disposable email mailbox API. Create temporary inboxes and poll messages.",
+    "contact": {
+      "name": "Fake Email",
+      "url": "https://fake-email.site"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://fake-email.site",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Service is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/temporary-address": {
+      "post": {
+        "summary": "Create a temporary mailbox",
+        "operationId": "createTemporaryAddress",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": ["string", "null"],
+                    "description": "Optional username prefix; random if omitted."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mailbox created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["temp_email_addr"],
+                  "properties": {
+                    "temp_email_addr": { "type": "string", "format": "email" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inbox/poll": {
+      "get": {
+        "summary": "Poll an inbox for messages",
+        "operationId": "pollInbox",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "email" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": { "type": "object" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -55,7 +55,7 @@ export function HomePage() {
       />
 
       <div className="relative z-10 flex min-h-dvh flex-col justify-center px-6 sm:px-12 lg:px-20">
-        <div className="w-full max-w-3xl">
+        <div className="w-full max-w-4xl">
           {/* Hero */}
           <motion.div
             className="mb-12 sm:mb-16"
@@ -70,7 +70,7 @@ export function HomePage() {
               <span className="sr-only">DISPOSABLE EMAIL</span>
               <div className="overflow-hidden" aria-hidden="true">
                 <motion.span
-                  className="block font-display text-[clamp(2.8rem,8vw,7rem)] font-extrabold leading-[0.88] tracking-[-0.03em]"
+                  className="block font-display text-[clamp(2.1rem,11vw,5.75rem)] font-extrabold leading-[0.9] tracking-[-0.04em] whitespace-nowrap"
                   variants={{
                     hidden: { y: "100%" },
                     visible: {
@@ -84,7 +84,7 @@ export function HomePage() {
               </div>
               <div className="overflow-hidden" aria-hidden="true">
                 <motion.span
-                  className="block font-display text-[clamp(2.8rem,8vw,7rem)] font-extrabold leading-[0.88] tracking-[-0.03em] flex items-baseline gap-2 sm:gap-4"
+                  className="block font-display text-[clamp(2.1rem,11vw,5.75rem)] font-extrabold leading-[0.9] tracking-[-0.04em] whitespace-nowrap flex items-baseline gap-2 sm:gap-4"
                   variants={{
                     hidden: { y: "100%" },
                     visible: {

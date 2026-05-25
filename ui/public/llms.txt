@@ -1,0 +1,58 @@
+# Fake Email
+
+> Free, anonymous disposable email service. Generate a temporary inbox in one click — no signup, no tracking. Built for developers, signups, and email verification testing. REST API available.
+
+## Summary
+
+Fake Email is a free temporary email (temp mail) service hosted at https://fake-email.site. Users (or agents) create a disposable mailbox at `@fake-email.site` and receive incoming messages in real time. Mailboxes auto-expire; nothing persists. No personal data is collected. The backend is an open-source Rust SMTP and HTTP service.
+
+## Primary URLs
+
+- Home: https://fake-email.site/
+- Inbox UI: https://fake-email.site/emails
+- API documentation (human): https://fake-email.site/docs/api
+- OpenAPI 3.1 spec: https://fake-email.site/openapi.json
+- Health endpoint: https://fake-email.site/api/health
+
+## Agent discovery
+
+- Link header on `/` advertises: api-catalog, agent-skills, service-doc, service-desc, status
+- API catalog (RFC 9727): https://fake-email.site/.well-known/api-catalog
+- Agent Skills index (RFC v0.2.0): https://fake-email.site/.well-known/agent-skills/index.json
+- Markdown content negotiation: send `Accept: text/markdown` to receive a markdown variant of the HTML page
+
+## Core API
+
+POST https://fake-email.site/api/temporary-address
+  Body (optional): {"username": "alice"}
+  Response: {"temp_email_addr": "alice@fake-email.site"}
+
+GET https://fake-email.site/api/inbox/poll?address=<addr>
+  Response: {"messages": [...]}
+
+GET https://fake-email.site/api/health
+  Response: {"status": "ok"}
+
+## Features
+
+- Instant disposable email address generation
+- Real-time inbox polling
+- No registration, no captcha, no tracking
+- Open-source backend (Rust)
+- REST API + OpenAPI spec
+- Auto-expiring mailboxes
+
+## Use cases
+
+- Sign up for services without exposing a real address
+- Receive one-time verification codes or password resets
+- QA / CI automation for email-dependent flows
+- Avoid spam after a known leak
+
+## Repository
+
+https://github.com/Shivrajsoni/fake-email
+
+## License
+
+Open-source. Free to use.

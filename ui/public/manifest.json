@@ -1,16 +1,41 @@
 {
-  "name": "Fake Email - Disposable & Anonymous Inboxes",
+  "name": "Fake Email — Disposable & Anonymous Inboxes",
   "short_name": "Fake Email",
-  "description": "Generate disposable email addresses instantly. No signups, no tracking.",
+  "description": "Generate disposable email addresses instantly. No signup, no tracking. Free temp mail for developers and verification.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
+  "scope": "/",
+  "id": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#ff3b3b",
+  "categories": ["utilities", "productivity", "developer"],
   "icons": [
     {
       "src": "/icon.png",
-      "sizes": "192x192 512x512",
-      "type": "image/png"
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open inbox",
+      "short_name": "Inbox",
+      "url": "/emails"
+    },
+    {
+      "name": "API docs",
+      "short_name": "API",
+      "url": "/docs/api"
     }
   ]
 }

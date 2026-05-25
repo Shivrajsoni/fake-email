@@ -1,18 +1,21 @@
-import { MetadataRoute } from 'next';
+import { MetadataRoute } from "next";
+
+const SITE_URL = "https://fake-email.site";
+const lastModified = new Date();
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: 'https://fake-email.site',
-      lastModified: new Date(),
-      changeFrequency: 'always',
-      priority: 1,
+      url: `${SITE_URL}/`,
+      lastModified,
+      changeFrequency: "daily",
+      priority: 1.0,
     },
     {
-      url: 'https://fake-email.site/emails',
-      lastModified: new Date(),
-      changeFrequency: 'always',
-      priority: 0.8,
+      url: `${SITE_URL}/docs/api`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.7,
     },
   ];
 }
