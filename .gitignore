@@ -4,3 +4,4 @@ result
 **/*.rs.bk
 .next/
 .DS_Store
+docs/*

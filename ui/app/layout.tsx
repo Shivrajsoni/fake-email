@@ -180,60 +180,74 @@ const WEBAPPLICATION_JSONLD = {
   publisher: { "@id": `${SITE_URL}/#organization` },
 } as const;
 
+const FAQ_ITEMS: ReadonlyArray<{ q: string; a: string }> = [
+  {
+    q: "What is a disposable email address?",
+    a: "A disposable email address — also called a temporary email, throwaway email, burner email, or fake email — is a short-lived inbox that lets you receive mail without revealing your real address. After a short period the inbox and any messages it received are deleted.",
+  },
+  {
+    q: "How is Fake Email different from temp-mail.org, 10minutemail, or Guerrilla Mail?",
+    a: "Fake Email is open source, ships a public OpenAPI 3.1 spec, exposes an llms.txt and agent-skills index for AI agents, and the entire Rust backend is on GitHub for you to read or self-host.",
+  },
+  {
+    q: "Is Fake Email really free?",
+    a: "Yes. Every feature is free. There is no paid tier, no signup, no credit card, and no ads on the inbox page.",
+  },
+  {
+    q: "How long does a temporary email last?",
+    a: "Mailboxes are ephemeral and auto-expire. Treat each address as single-use.",
+  },
+  {
+    q: "Can I send email from a disposable address?",
+    a: "No. Fake Email is receive-only to prevent abuse and keep the service free.",
+  },
+  {
+    q: "Do you store, sell, or read my messages?",
+    a: "No accounts exist, so there is nothing tied to a person. Mailboxes and their messages are purged on expiry.",
+  },
+  {
+    q: "Is there an API I can call from my app or tests?",
+    a: "Yes. See /docs/api and /openapi.json. Endpoints include POST /api/temporary-address and GET /api/inbox/poll.",
+  },
+  {
+    q: "Will incoming email show attachments?",
+    a: "Yes. Attachments arrive alongside the message body while the mailbox is alive.",
+  },
+  {
+    q: "Is Fake Email anonymous?",
+    a: "No signup is required, so no personally identifying information is collected by the service.",
+  },
+  {
+    q: "Is disposable email legal?",
+    a: "Using a disposable email address for privacy is legal in most jurisdictions. Always follow each website's terms of service.",
+  },
+  {
+    q: "Why might a website block disposable email addresses?",
+    a: "Some platforms block known disposable domains to reduce trial abuse or duplicate-account fraud.",
+  },
+  {
+    q: "Can I receive verification codes (OTPs) here?",
+    a: "Yes. Sign-up verification codes, magic links, and confirmation emails are all received normally.",
+  },
+  {
+    q: "Can AI agents use Fake Email?",
+    a: "Yes. Fake Email publishes llms.txt, an OpenAPI spec, a /.well-known/api-catalog, and an Agent Skills index. Agents can discover and call the service without a human in the loop.",
+  },
+  {
+    q: "How does Fake Email compare to using a Gmail alias?",
+    a: "A Gmail alias still lands in your real inbox and still ties the signup to your identity. A disposable address from Fake Email cannot be linked back to you and disappears when you are done.",
+  },
+];
+
 const FAQ_JSONLD = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "@id": `${SITE_URL}/#faq`,
-  mainEntity: [
-    {
-      "@type": "Question",
-      name: "What is a disposable email address?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "A disposable email address is a temporary inbox you can use for signups, verification, and testing without exposing your real address. It auto-expires after a short period.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Is Fake Email free to use?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes. Fake Email is completely free, requires no registration, and does not track users.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "How long does a temporary email last?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Temporary mailboxes are ephemeral and auto-expire. Treat them as short-lived inboxes for one-time use.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Can I receive attachments?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes. Incoming messages and their attachments appear in your inbox while the mailbox is alive.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Is there an API?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes. See /docs/api and /openapi.json for the REST API. Endpoints include POST /api/temporary-address and GET /api/inbox/poll.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Is Fake Email safe and anonymous?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "No signup is required and no personal data is stored. Mailboxes are anonymous and auto-expire.",
-      },
-    },
-  ],
+  mainEntity: FAQ_ITEMS.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
 } as const;
 
 const JSONLD_GRAPH = [
