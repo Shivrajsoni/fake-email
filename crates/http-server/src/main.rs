@@ -32,20 +32,22 @@ async fn main() {
     tokio::spawn({
         let pool_slot = Arc::clone(&pool_slot);
         async move {
-            let pool = match connect_pool().await {
-                Ok(p) => {
-                    tracing::info!("database connected");
-                    p
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "database connection failed");
-                    return;
+            let pool = loop {
+                match connect_pool().await {
+                    Ok(p) => {
+                        tracing::info!("database connected");
+                        break p;
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "database connection failed, retrying in 5s");
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
                 }
             };
 
             if let Err(e) = run_migrations(&pool).await {
-                tracing::error!(error = %e, "migrations failed");
-                return;
+                tracing::error!(error = %e, "migrations failed, exiting so systemd can restart");
+                std::process::exit(1);
             }
             tracing::info!("migrations applied");
 

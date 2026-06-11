@@ -28,7 +28,7 @@ export function Navbar() {
       </Link>
       <div className="flex items-center gap-3">
         <a
-          href="https://github.com/Shivrajsoni/fake-email"
+          href="https://github.com/sidhesh77/fake-emaail"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="View source on GitHub"
